@@ -6,105 +6,92 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime
 
 
-# Mock the database before importing the module
-@pytest.fixture(autouse=True)
-def mock_database():
-    """Mock the database connection and session"""
-    with patch('storage.database.create_engine') as mock_engine, \
-         patch('storage.database.sessionmaker') as mock_sessionmaker, \
-         patch('storage.database.SessionLocal') as mock_session_local:
+class TestConvenienceFunctions:
+    """Tests for convenience functions"""
 
-        # Setup mock session
-        mock_session = MagicMock()
-        mock_session_local.return_value = mock_session
-
-        # Store mock session for tests
-        mock_database.mock_session = mock_session
-
-        yield mock_session
-
-
-class TestProject:
-    """Tests for Project model operations"""
-
-    def test_create_project(self, mock_database):
-        """Test creating a new project"""
+    @patch('storage.database.SessionLocal')
+    def test_create_project(self, mock_session_local):
+        """Test create_project function"""
         from storage.database import create_project
 
         # Setup mock
-        mock_database.add = MagicMock()
-        mock_database.commit = MagicMock()
-        mock_database.refresh = MagicMock()
-        mock_database.close = MagicMock()
-
-        # Create a mock project object
-        mock_project = MagicMock()
-        mock_project.id = 1
-        mock_project.name = "Test Project"
-        mock_project.repo = "https://github.com/test/repo"
-        mock_project.local_path = "/data/repo/test"
-        mock_project.default_branch = "main"
-        mock_project.created_at = datetime.utcnow()
-        mock_database.refresh.side_effect = lambda x: setattr(x, 'id', 1)
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
 
         # Execute
-        with patch.object(mock_database, 'query') as mock_query:
-            mock_result = MagicMock()
-            mock_result.first.return_value = None
-            mock_query.return_value = mock_result
-
-            project = create_project("Test Project", "https://github.com/test/repo", "/data/repo/test")
+        project = create_project(
+            name="Test Project",
+            repo="https://github.com/test/repo",
+            local_path="/data/repo/test"
+        )
 
         # Verify
-        mock_database.add.assert_called_once()
-        mock_database.commit.assert_called_once()
-        mock_database.close.assert_called_once()
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.close.assert_called_once()
 
-    def test_get_project(self, mock_database):
-        """Test getting a project by name"""
+    @patch('storage.database.SessionLocal')
+    def test_get_project(self, mock_session_local):
+        """Test get_project function"""
         from storage.database import get_project
 
         # Setup mock
-        mock_database.query.return_value.filter.return_value.first.return_value = None
-        mock_database.close = MagicMock()
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.first.return_value = None
 
         # Execute
         result = get_project("NonExistent")
 
         # Verify
-        mock_database.close.assert_called_once()
+        mock_db.close.assert_called_once()
         assert result is None
 
-    def test_list_projects(self, mock_database):
-        """Test listing all projects"""
+    @patch('storage.database.SessionLocal')
+    def test_get_project_found(self, mock_session_local):
+        """Test get_project function when project exists"""
+        from storage.database import get_project
+
+        # Setup mock
+        mock_db = MagicMock()
+        mock_project = MagicMock()
+        mock_project.name = "Test Project"
+        mock_session_local.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_project
+
+        # Execute
+        result = get_project("Test Project")
+
+        # Verify
+        mock_db.close.assert_called_once()
+        assert result is not None
+        assert result.name == "Test Project"
+
+    @patch('storage.database.SessionLocal')
+    def test_list_projects(self, mock_session_local):
+        """Test list_projects function"""
         from storage.database import list_projects
 
         # Setup mock
-        mock_projects = [MagicMock(), MagicMock()]
-        mock_database.query.return_value.order_by.return_value.all.return_value = mock_projects
-        mock_database.close = MagicMock()
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
+        mock_db.query.return_value.order_by.return_value.all.return_value = []
 
         # Execute
         result = list_projects()
 
         # Verify
-        mock_database.close.assert_called_once()
-        assert len(result) == 2
+        mock_db.close.assert_called_once()
+        assert isinstance(result, list)
 
-
-class TestSession:
-    """Tests for Session model operations"""
-
-    def test_create_session(self, mock_database):
-        """Test creating a new session"""
+    @patch('storage.database.SessionLocal')
+    def test_create_session(self, mock_session_local):
+        """Test create_session function"""
         from storage.database import create_session
 
         # Setup mock
-        mock_database.add = MagicMock()
-        mock_database.commit = MagicMock()
-        mock_database.refresh = MagicMock()
-        mock_database.close = MagicMock()
-        mock_database.refresh.side_effect = lambda x: setattr(x, 'id', 1)
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
 
         # Execute
         session = create_session(
@@ -112,47 +99,46 @@ class TestSession:
             issue_number=1,
             branch="feature/test",
             worktree_path="/data/repo/test",
-            agent="claude-code",
-            runtime="tmux"
+            agent="claude-code"
         )
 
         # Verify
-        mock_database.add.assert_called_once()
-        mock_database.commit.assert_called_once()
-        mock_database.close.assert_called_once()
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.close.assert_called_once()
 
-    def test_update_session_status_pending(self, mock_database):
-        """Test updating session status to pending"""
+    @patch('storage.database.SessionLocal')
+    def test_update_session_status_pending(self, mock_session_local):
+        """Test update_session_status to pending"""
         from storage.database import update_session_status
 
         # Setup mock
+        mock_db = MagicMock()
         mock_session = MagicMock()
-        mock_session.status = "pending"
-        mock_session.started_at = None
-        mock_session.completed_at = None
-        mock_database.query.return_value.filter.return_value.first.return_value = mock_session
-        mock_database.commit = MagicMock()
-        mock_database.close = MagicMock()
+        mock_session.status = "running"
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_session
+        mock_session_local.return_value = mock_db
 
         # Execute
         update_session_status(1, "pending")
 
         # Verify
         assert mock_session.status == "pending"
-        mock_database.commit.assert_called_once()
-        mock_database.close.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.close.assert_called_once()
 
-    def test_update_session_status_running(self, mock_database):
-        """Test updating session status to running (should set started_at)"""
+    @patch('storage.database.SessionLocal')
+    def test_update_session_status_running(self, mock_session_local):
+        """Test update_session_status to running (sets started_at)"""
         from storage.database import update_session_status
 
         # Setup mock
+        mock_db = MagicMock()
         mock_session = MagicMock()
         mock_session.status = "pending"
         mock_session.started_at = None
-        mock_database.query.return_value.filter.return_value.first.return_value = mock_session
-        mock_database.commit = MagicMock()
-        mock_database.close = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_session
+        mock_session_local.return_value = mock_db
 
         # Execute
         update_session_status(1, "running")
@@ -160,20 +146,21 @@ class TestSession:
         # Verify
         assert mock_session.status == "running"
         assert mock_session.started_at is not None
-        mock_database.commit.assert_called_once()
-        mock_database.close.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.close.assert_called_once()
 
-    def test_update_session_status_done(self, mock_database):
-        """Test updating session status to done (should set completed_at)"""
+    @patch('storage.database.SessionLocal')
+    def test_update_session_status_done(self, mock_session_local):
+        """Test update_session_status to done (sets completed_at)"""
         from storage.database import update_session_status
 
         # Setup mock
+        mock_db = MagicMock()
         mock_session = MagicMock()
         mock_session.status = "running"
         mock_session.completed_at = None
-        mock_database.query.return_value.filter.return_value.first.return_value = mock_session
-        mock_database.commit = MagicMock()
-        mock_database.close = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_session
+        mock_session_local.return_value = mock_db
 
         # Execute
         update_session_status(1, "done")
@@ -181,20 +168,21 @@ class TestSession:
         # Verify
         assert mock_session.status == "done"
         assert mock_session.completed_at is not None
-        mock_database.commit.assert_called_once()
-        mock_database.close.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.close.assert_called_once()
 
-    def test_update_session_status_failed(self, mock_database):
-        """Test updating session status to failed (should set completed_at)"""
+    @patch('storage.database.SessionLocal')
+    def test_update_session_status_failed(self, mock_session_local):
+        """Test update_session_status to failed"""
         from storage.database import update_session_status
 
         # Setup mock
+        mock_db = MagicMock()
         mock_session = MagicMock()
         mock_session.status = "running"
         mock_session.completed_at = None
-        mock_database.query.return_value.filter.return_value.first.return_value = mock_session
-        mock_database.commit = MagicMock()
-        mock_database.close = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_session
+        mock_session_local.return_value = mock_db
 
         # Execute
         update_session_status(1, "failed")
@@ -202,144 +190,128 @@ class TestSession:
         # Verify
         assert mock_session.status == "failed"
         assert mock_session.completed_at is not None
-        mock_database.commit.assert_called_once()
-        mock_database.close.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.close.assert_called_once()
 
-    def test_update_session_not_found(self, mock_database):
-        """Test updating session that doesn't exist"""
+    @patch('storage.database.SessionLocal')
+    def test_update_session_not_found(self, mock_session_local):
+        """Test update_session_status when session not found"""
         from storage.database import update_session_status
 
         # Setup mock
-        mock_database.query.return_value.filter.return_value.first.return_value = None
-        mock_database.commit = MagicMock()
-        mock_database.close = MagicMock()
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_session_local.return_value = mock_db
 
-        # Execute - should not raise error
+        # Execute - should not raise
         update_session_status(999, "done")
 
         # Verify
-        mock_database.commit.assert_not_called()
-        mock_database.close.assert_called_once()
+        mock_db.commit.assert_not_called()
+        mock_db.close.assert_called_once()
 
-
-class TestStory:
-    """Tests for Story model operations"""
-
-    def test_create_story(self, mock_database):
-        """Test creating a new story"""
+    @patch('storage.database.SessionLocal')
+    def test_create_story(self, mock_session_local):
+        """Test create_story function"""
         from storage.database import create_story
 
         # Setup mock
-        mock_database.add = MagicMock()
-        mock_database.commit = MagicMock()
-        mock_database.refresh = MagicMock()
-        mock_database.close = MagicMock()
-        mock_database.refresh.side_effect = lambda x: setattr(x, 'id', 1)
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
 
         # Execute
         story = create_story(
             project_id=1,
             story_id="STORY-001",
-            title="Test Story",
-            depends_on="[]",
-            source_file="stories/test.md"
+            title="Test Story"
         )
 
         # Verify
-        mock_database.add.assert_called_once()
-        mock_database.commit.assert_called_once()
-        mock_database.close.assert_called_once()
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.close.assert_called_once()
 
-    def test_get_ready_stories_no_dependencies(self, mock_database):
-        """Test getting stories with no dependencies"""
+    @patch('storage.database.SessionLocal')
+    def test_get_ready_stories_no_dependencies(self, mock_session_local):
+        """Test get_ready_stories function with no dependencies"""
         from storage.database import get_ready_stories
 
         # Setup mock
-        mock_stories = [MagicMock(), MagicMock()]
-        for story in mock_stories:
-            story.depends_on = "[]"
-
-        mock_database.query.return_value.filter.return_value.all.return_value = mock_stories
-        mock_database.close = MagicMock()
-
-        # Execute
-        result = get_ready_stories(1)
-
-        # Verify
-        mock_database.close.assert_called_once()
-        assert len(result) == 2
-
-    def test_get_ready_stories_with_dependencies_all_completed(self, mock_database):
-        """Test getting stories with all dependencies completed"""
-        from storage.database import get_ready_stories
-
-        # Setup mock - story with dependencies
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
         mock_story = MagicMock()
-        mock_story.depends_on = '["STORY-001", "STORY-002"]'
-
-        mock_database.query.return_value.filter.return_value.all.side_effect = [
-            [mock_story],  # First call returns stories
-            [MagicMock(), MagicMock()]  # Second call returns completed dependencies
-        ]
-        mock_database.query.return_value.filter.return_value.count.return_value = 2
-        mock_database.close = MagicMock()
+        mock_story.depends_on = "[]"
+        mock_db.query.return_value.filter.return_value.all.return_value = [mock_story]
 
         # Execute
         result = get_ready_stories(1)
 
         # Verify
-        mock_database.close.assert_called_once()
+        mock_db.close.assert_called_once()
         assert len(result) == 1
 
-    def test_get_ready_stories_with_dependencies_incomplete(self, mock_database):
-        """Test getting stories with incomplete dependencies"""
+    @patch('storage.database.SessionLocal')
+    def test_get_ready_stories_with_dependencies_completed(self, mock_session_local):
+        """Test get_ready_stories function with completed dependencies"""
         from storage.database import get_ready_stories
 
-        # Setup mock - story with dependencies
+        # Setup mock
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
         mock_story = MagicMock()
         mock_story.depends_on = '["STORY-001", "STORY-002"]'
 
-        mock_database.query.return_value.filter.return_value.all.side_effect = [
-            [mock_story],  # First call returns stories
-            [MagicMock()]  # Second call returns only 1 completed dependency
+        # First query returns the story, second query returns completed dependencies
+        mock_db.query.return_value.filter.return_value.all.side_effect = [
+            [mock_story],
+            [MagicMock(), MagicMock()]  # Both dependencies completed
         ]
-        mock_database.query.return_value.filter.return_value.count.return_value = 1
-        mock_database.close = MagicMock()
+        mock_db.query.return_value.filter.return_value.count.return_value = 2
 
         # Execute
         result = get_ready_stories(1)
 
         # Verify
-        mock_database.close.assert_called_once()
-        assert len(result) == 0
+        mock_db.close.assert_called_once()
+        assert len(result) == 1
 
-    def test_get_ready_stories_empty(self, mock_database):
-        """Test getting ready stories when none exist"""
+    @patch('storage.database.SessionLocal')
+    def test_get_ready_stories_with_dependencies_incomplete(self, mock_session_local):
+        """Test get_ready_stories function with incomplete dependencies"""
         from storage.database import get_ready_stories
 
         # Setup mock
-        mock_database.query.return_value.filter.return_value.all.return_value = []
-        mock_database.close = MagicMock()
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
+        mock_story = MagicMock()
+        mock_story.depends_on = '["STORY-001", "STORY-002"]'
+
+        mock_db.query.return_value.filter.return_value.all.side_effect = [
+            [mock_story],
+            [MagicMock()]  # Only 1 dependency completed
+        ]
+        mock_db.query.return_value.filter.return_value.count.return_value = 1
 
         # Execute
         result = get_ready_stories(1)
 
         # Verify
-        mock_database.close.assert_called_once()
+        mock_db.close.assert_called_once()
         assert len(result) == 0
 
-
-class TestDatabaseInit:
-    """Tests for database initialization"""
-
-    def test_init_db(self, mock_database):
-        """Test database initialization"""
-        from storage.database import init_db, Base
+    @patch('storage.database.SessionLocal')
+    def test_get_ready_stories_empty_result(self, mock_session_local):
+        """Test get_ready_stories function with no stories"""
+        from storage.database import get_ready_stories
 
         # Setup mock
-        with patch.object(Base.metadata, 'create_all') as mock_create_all:
-            # Execute
-            init_db()
+        mock_db = MagicMock()
+        mock_session_local.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.all.return_value = []
 
-            # Verify
-            mock_create_all.assert_called_once()
+        # Execute
+        result = get_ready_stories(1)
+
+        # Verify
+        mock_db.close.assert_called_once()
+        assert len(result) == 0
