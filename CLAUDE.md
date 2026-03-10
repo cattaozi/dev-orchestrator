@@ -15,16 +15,56 @@ DevPilot 是一个 AI 驱动的开发编排系统，用户通过自然语言与 
 ```
 /data/repo/dev-orchestrator/
 ├── web/
-│   ├── frontend/          # Next.js 前端
-│   │   ├── app/          # 页面组件
-│   │   ├── components/   # UI 组件
-│   │   └── lib/         # 工具函数
-│   └── backend/          # FastAPI 后端
-│       └── main.py
-├── storage/               # 数据模型
-├── core/                 # 核心引擎
-├── skills/               # Skill 适配层
-└── docs/                # 文档
+│   ├── frontend/                    # Next.js 前端
+│   │   ├── app/                    # 页面组件
+│   │   │   ├── projects/           # 项目相关页面
+│   │   │   │   └── [id]/
+│   │   │   │       ├── page.tsx                    # 项目详情页
+│   │   │   │       ├── issues/[issueId]/            # Issue 详情页
+│   │   │   │       │   ├── page.tsx
+│   │   │   │       │   └── sessions/[sessionId]/   # Session 详情页
+│   │   │   │       │       ├── page.tsx
+│   │   │   │       │       ├── prompt/page.tsx      # 发送 prompt
+│   │   │   │       │       └── agent-prompt/page.tsx
+│   │   │   │       ├── prds/[prdId]/                # PRD 详情页
+│   │   │   │       └── workers/[workerId]/          # Worker 详情页
+│   │   │   ├── api/                   # API 路由
+│   │   │   ├── workers/               # Workers 页面
+│   │   │   ├── sessions/              # Sessions 页面
+│   │   │   └── settings/              # 设置页面
+│   │   ├── components/                # UI 组件
+│   │   │   ├── message-cards.tsx
+│   │   │   └── terminal-output.tsx
+│   │   └── lib/                      # 工具函数
+│   │       └── message-parser.ts
+│   └── backend/                      # FastAPI 后端
+│       ├── main.py                   # 入口文件
+│       ├── models.py                  # Pydantic 模型
+│       ├── db.py                      # 数据库连接
+│       ├── routers/                   # 路由模块
+│       │   ├── projects.py
+│       │   ├── issues.py
+│       │   ├── sessions.py
+│       │   ├── workers.py
+│       │   ├── prds.py
+│       │   └── config.py
+│       └── services/                  # 业务逻辑
+│           ├── project_service.py
+│           ├── issue_service.py
+│           ├── session_service.py
+│           ├── worker_service.py
+│           ├── prd_service.py
+│           └── config_service.py
+├── storage/                           # 数据存储层
+│   └── database.py
+├── core/                             # 核心引擎
+│   └── dispatcher.py
+├── skills/                           # Skill 适配层
+├── config/                           # 配置文件
+├── cli/                              # CLI 工具
+├── plugins/                          # 插件
+├── docs/                             # 文档
+└── tests/                            # 测试
 ```
 
 ## 常用命令

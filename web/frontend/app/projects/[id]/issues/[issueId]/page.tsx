@@ -254,8 +254,11 @@ export default function IssueDetailPage() {
   const confirmClearSessions = async () => {
     setClearingSessions(true)
     try {
-      // Delete all sessions for this issue
+      // First kill all running sessions, then delete their data
       for (const session of sessions) {
+        if (session.status === 'running') {
+          await fetch(`/api/sessions/${session.id}`, { method: 'DELETE' })
+        }
         await fetch(`/api/sessions/${session.id}/data`, { method: 'DELETE' })
       }
       setSessions([])
@@ -636,7 +639,6 @@ export default function IssueDetailPage() {
                       {session.status}
                     </Badge>
                     <span className="text-sm font-mono">{session.branch}</span>
-                    <span className="text-xs text-muted-foreground">{session.tmux_session}</span>
                   </Link>
                   <button
                     className="p-1 opacity-0 group-hover:opacity-100 hover:bg-background rounded"

@@ -1,13 +1,15 @@
 'use client'
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useMemo } from "react"
 import { useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
-import { ArrowLeft, Loader2, RefreshCw, Send, Circle, Square, X, ExternalLink, ChevronRight, ChevronDown, Trash2, MoreHorizontal, Info } from "lucide-react"
+import { ArrowLeft, Loader2, Send, Circle, Square, X, ExternalLink, Trash2, MoreHorizontal, Info, User, Bot, ChevronDown, ChevronRight } from "lucide-react"
+import { parseEventContent, ParsedMessage } from "@/lib/message-parser"
+import { MessageCard } from "@/components/message-cards"
 
 interface Session {
   id: number
@@ -19,11 +21,8 @@ interface Session {
   agent_type: string
   worker_id: number
   runtime: string
-  log_path: string
-  tmux_session: string
   command: string
   prompt: string
-  created_at: string
   started_at: string
   completed_at: string | null
 }
@@ -35,6 +34,7 @@ interface SessionEvent {
   content: string
   tool_name: string
   tool_input: string
+  data: unknown
   created_at: string
 }
 
@@ -590,19 +590,107 @@ export default function SessionDetailPage() {
           <div
             ref={containerRef}
             onScroll={handleScroll}
-            className="h-full overflow-y-auto p-4 bg-black text-white font-mono text-xs"
+            className="h-full overflow-y-auto p-4 bg-black text-zinc-100 font-mono"
           >
             {events.length === 0 ? (
-              <div className="text-center text-gray-400 py-10">
+              <div className="text-center text-zinc-500 py-10">
                 <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
                 <p>等待 Agent 响应...</p>
               </div>
             ) : (
-              events.map((event) => (
-                <pre key={event.id} className="whitespace-pre-wrap break-all">
-                  {event.content.replace(/\\n/g, '\n')}
-                </pre>
-              ))
+              <div className="space-y-2">
+                {events.map((event) => {
+                  // Parse event content into messages
+                  const messages = parseEventContent(event.content || '')
+                  const isUser = event.role === 'user'
+
+                  return (
+                    <div
+                      key={event.id}
+                      className={`mb-2 ${isUser ? 'ml-auto max-w-[80%]' : ''}`}
+                    >
+                      {/* User message - special style */}
+                      {isUser && (
+                        <div className="border border-zinc-600 rounded px-2 py-1 bg-zinc-800/50">
+                          <div className="text-sm text-zinc-100 whitespace-pre-wrap">
+                            {event.content.replace(/\\n/g, '\n')}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Agent message - just cards */}
+                      {!isUser && (
+                        <div>
+                          {(() => {
+                            // 优先使用后端解析好的 data 字段
+                            const data = event.data as Array<{
+                              type: string
+                              thinking?: string
+                              signature?: string
+                              text?: string
+                              name?: string
+                              id?: string
+                              tool_use_id?: string
+                              content?: string
+                              is_error?: boolean
+                              diff_stats?: { added: number; deleted: number }
+                              line_count?: number
+                              input?: Record<string, unknown>
+                            }> | null
+
+                            // 如果有解析好的 data，直接使用
+                            if (data && data.length > 0) {
+                              return data.map((block, idx) => (
+                                <ParsedBlock key={`${event.id}-${idx}`} block={block} />
+                              ))
+                            }
+
+                            // 后备：使用旧的解析方式
+                            const rawContent = event.content.replace(/\\n/g, '\n')
+                            const lines = rawContent.split('\n')
+                            const isBlockFormat = rawContent.includes('[ToolUseBlock') || rawContent.includes('[ToolResultBlock')
+                            const isJsonArrayContent = rawContent.match(/content=\[/)
+
+                            if (isJsonArrayContent && lines.length > 2) {
+                              return (
+                                <CollapsedBlock
+                                  content={rawContent}
+                                  lineCount={lines.length}
+                                />
+                              )
+                            }
+
+                            if (messages.length > 0) {
+                              return messages.map((msg, idx) => (
+                                <div key={`${event.id}-${idx}`}>
+                                  <MessageCard message={msg} />
+                                </div>
+                              ))
+                            }
+
+                            // 消息解析失败时，如果是块格式且超过2行，收缩显示
+                            if (isBlockFormat && lines.length > 2) {
+                              return (
+                                <CollapsedBlock
+                                  content={rawContent}
+                                  lineCount={lines.length}
+                                />
+                              )
+                            }
+
+                            // 否则直接显示
+                            return (
+                              <pre className="whitespace-pre-wrap break-all text-sm text-zinc-300">
+                                {rawContent}
+                              </pre>
+                          )
+                        })()}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             )}
             <div ref={eventsEndRef} />
           </div>
@@ -631,4 +719,112 @@ export default function SessionDetailPage() {
       </div>
     </div>
   )
+}
+
+// Collapsed block for long content - simple approach
+function CollapsedBlock({ content, lineCount }: { content: string; lineCount: number }) {
+  const [expanded, setExpanded] = useState(false)
+
+  // 提取块类型和工具名
+  const isToolUse = content.includes('[ToolUseBlock')
+  const isToolResult = content.includes('[ToolResultBlock')
+
+  // 尝试提取工具名
+  let toolName = 'Tool'
+  let toolId = ''
+  const nameMatch = content.match(/name='([^']+)'/)
+  const idMatch = content.match(/id='([^']+)'/)
+  if (nameMatch) toolName = nameMatch[1]
+  if (idMatch) toolId = idMatch[1].slice(0, 8)
+
+  const icon = isToolUse ? '🔧' : isToolResult ? '📤' : '📄'
+
+  return (
+    <div className="border border-zinc-800 rounded my-1 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 px-2 py-1 hover:bg-zinc-900 transition-colors text-left"
+      >
+        <span className="text-sm text-zinc-400">{icon}</span>
+        <span className="text-sm font-mono text-zinc-300">{toolName}</span>
+        {toolId && <span className="text-sm text-zinc-600">#{toolId}</span>}
+        <span className="text-sm text-green-500">+{lineCount}</span>
+        {expanded ? (
+          <ChevronDown className="h-3 w-3 ml-auto text-zinc-500" />
+        ) : (
+          <ChevronRight className="h-3 w-3 ml-auto text-zinc-500" />
+        )}
+      </button>
+      {expanded && (
+        <div className="px-2 pb-2 border-t border-zinc-800">
+          <pre className="text-sm text-zinc-300 font-mono whitespace-pre-wrap">
+            {content}
+          </pre>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ParsedBlock - render blocks from backend parsed data
+function ParsedBlock({ block }: { block: {
+  type: string
+  thinking?: string
+  signature?: string
+  text?: string
+  name?: string
+  id?: string
+  tool_use_id?: string
+  content?: string
+  is_error?: boolean
+  diff_stats?: { added: number; deleted: number }
+  line_count?: number
+  input?: Record<string, unknown>
+} }) {
+  switch (block.type) {
+    case 'thinking':
+      return (
+        <div className="text-sm text-zinc-400 my-0.5">
+          🧠 <span className="text-zinc-500">{block.thinking?.slice(0, 50)}...</span>
+        </div>
+      )
+    case 'text':
+      return (
+        <div className="text-sm text-zinc-300 my-1 whitespace-pre-wrap">
+          {block.text}
+        </div>
+      )
+    case 'tool_use':
+      return (
+        <div className="text-sm text-zinc-400 my-0.5">
+          🔧 <span className="text-zinc-300">{block.name}</span>
+          {block.id && <span className="text-zinc-600"> #{block.id.slice(0, 6)}</span>}
+          {block.line_count && <span className="text-green-500"> +{block.line_count}</span>}
+        </div>
+      )
+    case 'tool_result':
+      const isLong = (block.content?.split('\n').length || 0) > 3
+      const isDiff = block.content?.includes('@@') || block.content?.includes('+++')
+      return (
+        <div className="text-sm text-zinc-400 my-0.5">
+          📤 <span className="text-zinc-300">result</span>
+          {block.is_error && <span className="text-red-500 ml-1">error</span>}
+          {block.diff_stats && (
+            <>
+              <span className="text-green-500 ml-1">+{block.diff_stats.added}</span>
+              {block.diff_stats.deleted > 0 && <span className="text-red-500 ml-1">-{block.diff_stats.deleted}</span>}
+            </>
+          )}
+          {!block.diff_stats && isLong && <span className="text-zinc-600 ml-1">{block.content?.split('\n').length} lines</span>}
+        </div>
+      )
+    case 'system_reminder':
+      return (
+        <div className="text-sm text-yellow-400 my-1">
+          ⚠️ {block.text}
+        </div>
+      )
+    default:
+      return null
+  }
 }
