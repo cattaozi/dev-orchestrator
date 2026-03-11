@@ -5,6 +5,7 @@ from pathlib import Path
 from loguru import logger
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 # Create logs directory
 logs_dir = "/data/logs"
@@ -63,6 +64,15 @@ init_db()
 from routers import projects, prds, issues, workers, sessions, config
 
 app = FastAPI(title="DevOrchestrator API")
+
+# Global exception handler - 兜底捕获所有未处理异常
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception(f"Unhandled exception on {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {str(exc)}"}
+    )
 
 # Request logging middleware
 @app.middleware("http")

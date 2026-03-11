@@ -125,26 +125,30 @@ def create_session(session_create: SessionCreate) -> dict:
 
     # Worktree path based on issue id
     worktree_path = f"/home/claude/worktrees/{issue['id']}"
+    branch_name = f"task/issue-{issue['id']}"
 
     # 安全校验
     if not _validate_path(worktree_path):
         conn.close()
         raise ValueError(f"Invalid worktree path: {worktree_path}")
+    if not _validate_branch_name(branch_name):
+        conn.close()
+        raise ValueError(f"Invalid branch name: {branch_name}")
 
-    # Create worktree based on current branch (let Claude decide whether to create a new branch)
+    # Create worktree with dedicated branch (MVP: 强制物理隔离)
     try:
         if os.path.exists(worktree_path):
             logger.info(f"Worktree path already exists: {worktree_path}, reusing it")
         else:
-            # Create worktree on current branch (HEAD), Claude will decide if a new branch is needed
+            # 强制创建带分支的 Worktree
             subprocess.run(
-                ["git", "worktree", "add", worktree_path],
+                ["git", "worktree", "add", worktree_path, "-b", branch_name],
                 cwd=project['local_path'],
                 capture_output=True,
                 timeout=30,
                 check=True
             )
-            logger.info(f"Created worktree at {worktree_path} on current branch")
+            logger.info(f"Created worktree at {worktree_path} with branch {branch_name}")
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to create worktree: {e.stderr}")
         conn.close()
@@ -154,22 +158,18 @@ def create_session(session_create: SessionCreate) -> dict:
         conn.close()
         raise RuntimeError("Worktree creation timed out")
 
-    # Get footer prompt (branch creation is left to Claude's decision)
+    # Get footer prompt with explicit branch instruction
     cursor.execute("SELECT value FROM config WHERE key = 'agent_footer_prompt'")
     config_result = cursor.fetchone()
     default_footer = f"""项目路径: {worktree_path}
 
-请根据任务性质决定：
-- 如果是开发类任务，请创建新分支进行开发
-- 如果是分析类任务，可以直接在当前分支工作
-
-完成后请汇报结果。"""
+请在此分支 `{branch_name}` 上进行开发工作。完成后请汇报结果。"""
     footer_prompt = config_result['value'] if config_result else default_footer
 
-    return _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_path, footer_prompt)
+    return _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_path, branch_name, footer_prompt)
 
 
-def _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_path, footer_prompt):
+def _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_path, branch_name, footer_prompt):
     """创建 agent-sdk 模式的 session - 使用 ClaudeSDKClient 支持双向对话"""
     try:
         from claude_agent_sdk import client as sdk_client
@@ -196,14 +196,15 @@ def _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_pat
 
     full_prompt = f"{system_prompt}\n\n{user_prompt}\n\n{footer_prompt}"
 
-    # Create session (branch is NULL initially, Claude will decide if a new branch is needed)
+    # Create session with branch
     cursor.execute("""
         INSERT INTO sessions (issue_id, project_id, branch, worktree_path, status, agent_type, worker_id, runtime, command, started_at, prompt)
-        VALUES (%s, %s, NULL, %s, 'running', %s, %s, %s, %s, NOW(), %s)
+        VALUES (%s, %s, %s, %s, 'running', %s, %s, %s, %s, NOW(), %s)
         RETURNING *
     """, (
         issue['id'],
         project['id'],
+        branch_name,
         worktree_path,
         worker.get('agent_type', 'claude-code'),
         worker.get('id'),
@@ -224,11 +225,11 @@ def _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_pat
         VALUES (%s, 'message', 'user', %s)
     """, (session_id, full_prompt))
 
-    # 更新 issue 表的 worktree (branch 由 Claude 决定后更新)
+    # 更新 issue 表的 worktree 和 branch
     cursor.execute("""
-        UPDATE issues SET worktree = %s, worktree_state = 'exists'
+        UPDATE issues SET worktree = %s, worktree_state = 'exists', branch = %s
         WHERE id = %s
-    """, (worktree_path, issue['id']))
+    """, (worktree_path, branch_name, issue['id']))
 
     conn.commit()
     conn.close()
@@ -561,9 +562,7 @@ def send_session_message(session_id: int, role: str, content: str):
             except Exception as e:
                 logger.error(f"Error sending message via SDK: {e}")
 
-        # Safely push the coroutine to the agent's event loop
-        future = asyncio.run_coroutine_threadsafe(_send_msg_task(), target_loop)
-        # Wait for completion (with timeout)
-        future.result(timeout=120)
+        # Safely push the coroutine to the agent's event loop (Fire and Forget)
+        asyncio.run_coroutine_threadsafe(_send_msg_task(), target_loop)
     else:
         raise ValueError("No active agent for this session")

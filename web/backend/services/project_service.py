@@ -106,7 +106,7 @@ def get_project_readme(project_id: int) -> dict:
     if not project:
         raise ValueError("Project not found")
 
-    readme_paths = ['README.md', 'README.txt', 'readme.md', 'README.MD']
+    readme_paths = ['README.md', 'README.txt', 'readme.md', 'README.MD', 'CLAUDE.md']
     for readme in readme_paths:
         path = f"{project['local_path']}/{readme}"
         if os.path.exists(path):

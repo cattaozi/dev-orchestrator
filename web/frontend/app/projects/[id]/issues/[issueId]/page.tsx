@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import Link from "next/link"
-import { ArrowLeft, Loader2, Calendar, Play, Pencil, Trash2, Folder, X, Check, MoreVertical, Trash, RefreshCw } from "lucide-react"
+import { ArrowLeft, Loader2, Calendar, Play, Pencil, Trash2, Folder, X, Check, MoreVertical, Trash, RefreshCw, XCircle } from "lucide-react"
 
 interface Issue {
   id: number
@@ -89,6 +89,11 @@ export default function IssueDetailPage() {
   // Clear all sessions
   const [showClearSessionsDialog, setShowClearSessionsDialog] = useState(false)
   const [clearingSessions, setClearingSessions] = useState(false)
+  // Delete worktree/branch
+  const [showDeleteWorktreeDialog, setShowDeleteWorktreeDialog] = useState(false)
+  const [deletingWorktree, setDeletingWorktree] = useState(false)
+  const [showDeleteBranchDialog, setShowDeleteBranchDialog] = useState(false)
+  const [deletingBranch, setDeletingBranch] = useState(false)
 
   // Auto-initialize project workers from system workers if not already done
   useEffect(() => {
@@ -268,6 +273,48 @@ export default function IssueDetailPage() {
       alert('Failed to clear sessions')
     } finally {
       setClearingSessions(false)
+    }
+  }
+
+  const handleDeleteWorktree = async () => {
+    if (!issue?.worktree) return
+    setDeletingWorktree(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/issues/${issueId}/worktree`, {
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        setIssue(prev => prev ? { ...prev, worktree: undefined, worktree_state: undefined } : null)
+        setShowDeleteWorktreeDialog(false)
+      } else {
+        const data = await res.json()
+        alert(data.detail || 'Failed to delete worktree')
+      }
+    } catch {
+      alert('Failed to delete worktree')
+    } finally {
+      setDeletingWorktree(false)
+    }
+  }
+
+  const handleDeleteBranch = async () => {
+    if (!issue?.branch) return
+    setDeletingBranch(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/issues/${issueId}/branch`, {
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        setIssue(prev => prev ? { ...prev, branch: undefined, branch_state: undefined } : null)
+        setShowDeleteBranchDialog(false)
+      } else {
+        const data = await res.json()
+        alert(data.detail || 'Failed to delete branch')
+      }
+    } catch {
+      alert('Failed to delete branch')
+    } finally {
+      setDeletingBranch(false)
     }
   }
 
@@ -609,13 +656,31 @@ export default function IssueDetailPage() {
               <Badge variant={issue.worktree_state === 'exists' ? 'default' : 'outline'}>
                 {issue.worktree_state || 'none'}
               </Badge>
+              <button
+                className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
+                onClick={() => setShowDeleteWorktreeDialog(true)}
+                title="删除 Worktree"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+              </button>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">Branch:</span>
-              <code className="bg-muted px-2 py-1 rounded text-xs">{issue.branch}</code>
-              <Badge variant={issue.branch_state === 'pushed' ? 'default' : 'outline'}>
-                {issue.branch_state || 'none'}
-              </Badge>
+              <code className="bg-muted px-2 py-1 rounded text-xs">{issue.branch || 'none'}</code>
+              {issue.branch && (
+                <>
+                  <Badge variant={issue.branch_state === 'pushed' ? 'default' : 'outline'}>
+                    {issue.branch_state || 'local'}
+                  </Badge>
+                  <button
+                    className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowDeleteBranchDialog(true)}
+                    title="删除 Branch"
+                  >
+                    <XCircle className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -759,6 +824,60 @@ export default function IssueDetailPage() {
                 </>
               ) : (
                 'Delete'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Worktree Confirmation Dialog */}
+      <Dialog open={showDeleteWorktreeDialog} onOpenChange={setShowDeleteWorktreeDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>删除 Worktree</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            确定要删除 Worktree <code className="bg-muted px-1 rounded">{issue?.worktree}</code> 吗？
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteWorktreeDialog(false)} disabled={deletingWorktree}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteWorktree} disabled={deletingWorktree}>
+              {deletingWorktree ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  删除中...
+                </>
+              ) : (
+                '删除'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Branch Confirmation Dialog */}
+      <Dialog open={showDeleteBranchDialog} onOpenChange={setShowDeleteBranchDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>删除 Branch</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            确定要删除分支 <code className="bg-muted px-1 rounded">{issue?.branch}</code> 吗？
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteBranchDialog(false)} disabled={deletingBranch}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteBranch} disabled={deletingBranch}>
+              {deletingBranch ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  删除中...
+                </>
+              ) : (
+                '删除'
               )}
             </Button>
           </DialogFooter>

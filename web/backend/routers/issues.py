@@ -47,3 +47,27 @@ def delete_issue(project_id: int, issue_id: int):
         return {"message": "Issue deleted"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/{issue_id}/worktree")
+def delete_issue_worktree(project_id: int, issue_id: int):
+    """删除 issue 的 worktree"""
+    try:
+        issue_service.delete_issue_worktree(project_id, issue_id)
+        return {"message": "Worktree deleted"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{issue_id}/branch")
+def delete_issue_branch(project_id: int, issue_id: int):
+    """删除 issue 的分支"""
+    try:
+        issue_service.delete_issue_branch(project_id, issue_id)
+        return {"message": "Branch deleted"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
