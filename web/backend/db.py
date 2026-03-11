@@ -76,6 +76,10 @@ def init_db():
             title TEXT NOT NULL,
             content TEXT DEFAULT '',
             status TEXT DEFAULT 'pending',
+            worktree TEXT,
+            branch TEXT,
+            worktree_state TEXT DEFAULT 'none',
+            branch_state TEXT DEFAULT 'none',
             created_at TIMESTAMP DEFAULT NOW()
         )
     """)

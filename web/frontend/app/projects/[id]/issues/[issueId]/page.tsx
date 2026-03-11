@@ -16,6 +16,10 @@ interface Issue {
   title: string
   content: string
   status: string
+  worktree?: string
+  branch?: string
+  worktree_state?: string
+  branch_state?: string
   created_at: string
 }
 
@@ -254,11 +258,8 @@ export default function IssueDetailPage() {
   const confirmClearSessions = async () => {
     setClearingSessions(true)
     try {
-      // First kill all running sessions, then delete their data
+      // 直接删除每个 session（delete_session_data 会清理 worktree、branch、events 和 session 记录）
       for (const session of sessions) {
-        if (session.status === 'running') {
-          await fetch(`/api/sessions/${session.id}`, { method: 'DELETE' })
-        }
         await fetch(`/api/sessions/${session.id}/data`, { method: 'DELETE' })
       }
       setSessions([])
@@ -596,6 +597,30 @@ export default function IssueDetailPage() {
       </div>
 
       {/* Issue Content */}
+      {issue.worktree && (
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-base">开发环境</CardTitle>
+          </CardHeader>
+          <CardContent className="py-2 space-y-2">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Worktree:</span>
+              <code className="bg-muted px-2 py-1 rounded text-xs">{issue.worktree}</code>
+              <Badge variant={issue.worktree_state === 'exists' ? 'default' : 'outline'}>
+                {issue.worktree_state || 'none'}
+              </Badge>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Branch:</span>
+              <code className="bg-muted px-2 py-1 rounded text-xs">{issue.branch}</code>
+              <Badge variant={issue.branch_state === 'pushed' ? 'default' : 'outline'}>
+                {issue.branch_state || 'none'}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="py-3">
           <CardTitle className="text-base">Description</CardTitle>

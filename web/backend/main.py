@@ -1,5 +1,59 @@
-from fastapi import FastAPI
+import os
+import sys
+import logging
+from pathlib import Path
+from loguru import logger
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+
+# Create logs directory
+logs_dir = "/data/logs"
+os.makedirs(logs_dir, exist_ok=True)
+
+# Configure logging
+def setup_logging():
+    """配置日志：同时输出到控制台和文件"""
+    # 移除 loguru 默认的 handler
+    logger.remove()
+
+    # 日志格式
+    log_format = (
+        "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | "
+        "{name}:{function}:{line} - {message}"
+    )
+
+    # 控制台输出
+    logger.add(
+        sys.stdout,
+        format=log_format,
+        level="INFO",
+        colorize=True,
+    )
+
+    # 文件输出
+    logger.add(
+        os.path.join(logs_dir, "app.log"),
+        format=log_format,
+        level="DEBUG",
+        rotation="100 MB",
+        retention="7 days",
+        compression="gz",
+        encoding="utf-8",
+    )
+
+    # 配置默认的 trace_id
+    logger.configure(extra={"trace_id": "-"})
+
+    # 拦截标准库 logging
+    class InterceptHandler(logging.Handler):
+        def emit(self, record):
+            level = logger.level(record.levelname).name if record.levelname in logger._core.levels else record.levelno
+            logger.opt(depth=6, exception=record.exc_info).log(level, record.getMessage())
+
+    logging.basicConfig(handlers=[InterceptHandler()], level=logging.INFO, force=True)
+
+setup_logging()
+logger.info("Logging initialized")
 
 # Initialize database
 from db import init_db
@@ -9,6 +63,14 @@ init_db()
 from routers import projects, prds, issues, workers, sessions, config
 
 app = FastAPI(title="DevOrchestrator API")
+
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info(f"--> {request.method} {request.url.path}")
+    response = await call_next(request)
+    logger.info(f"<-- {request.method} {request.url.path} {response.status_code}")
+    return response
 
 # CORS
 app.add_middleware(

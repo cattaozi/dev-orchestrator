@@ -126,6 +126,10 @@ class IssueResponse(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     status: str
+    worktree: Optional[str] = None
+    branch: Optional[str] = None
+    worktree_state: Optional[str] = None
+    branch_state: Optional[str] = None
     created_at: str
 
 
