@@ -71,8 +71,8 @@ DevPilot 是一个 AI 驱动的开发编排系统，用户通过自然语言与 
 
 ```bash
 # 启动后端
-cd /data/repo/dev-orchestrator/web/backend
-python3 main.py
+cd /data/repo/dev-orchestrator
+uv run python web/backend/main.py
 
 # 启动前端
 cd /data/repo/dev-orchestrator/web/frontend

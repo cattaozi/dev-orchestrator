@@ -1,6 +1,11 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from dotenv import load_dotenv
+
+# Load environment variables from project root
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env")
+load_dotenv(env_path)
 
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
@@ -146,7 +151,7 @@ def _generate_worker_prompt_files(cursor):
         ("Tester", "🧪", "claude-code", "你是一个专业的测试工程师。负责编写测试用例，执行测试，发现并报告 bug。"),
     ]
 
-    prompt_base_dir = "/home/claude/worker-prompts"
+    prompt_base_dir = os.path.expanduser("~/worker-prompts")
     os.makedirs(prompt_base_dir, exist_ok=True)
 
     for i, (name, emoji, agent_type, template) in enumerate(workers, start=1):

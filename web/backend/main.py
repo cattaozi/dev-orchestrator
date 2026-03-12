@@ -2,13 +2,19 @@ import os
 import sys
 import logging
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env")
+load_dotenv(env_path)
+
 from loguru import logger
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-# Create logs directory
-logs_dir = "/data/logs"
+# Create logs directory - 使用项目目录下的 logs 文件夹
+logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "logs")
 os.makedirs(logs_dir, exist_ok=True)
 
 # Configure logging
