@@ -135,41 +135,117 @@ def create_session(session_create: SessionCreate) -> dict:
         conn.close()
         raise ValueError(f"Invalid branch name: {branch_name}")
 
-    # Create worktree with dedicated branch (MVP: 强制物理隔离)
+    # ========== Worktree 初始化：幂等模式 (Idempotent Pattern) ==========
+    # 目标：无论当前环境状态如何，最终一定能得到可工作的 worktree
+    # 场景覆盖：
+    #   1. 分支不存在，Worktree 不存在 -> 全新创建 (Add -b)
+    #   2. 分支存在，Worktree 不存在 -> 切换到已有分支 (Add)
+    #   3. 分支存在，Worktree 已存在 -> 直接重用 (Reuse)
+
     try:
+        # Step 0: 同步远端分支信息
+        logger.info(f"Fetching latest from remote for project {project['local_path']}")
+        subprocess.run(
+            ["git", "fetch", "--all"],
+            cwd=project['local_path'],
+            capture_output=True,
+            timeout=60,
+            check=True
+        )
+
+        # Step 1: 检查 Worktree 是否已存在
         if os.path.exists(worktree_path):
-            logger.info(f"Worktree path already exists: {worktree_path}, reusing it")
+            # 场景 3: Worktree 已存在，直接重用
+            logger.info(f"Worktree already exists at {worktree_path}, reusing it")
+
+            # 确保环境清洁：reset 到分支最新状态
+            try:
+                subprocess.run(
+                    ["git", "reset", "--hard", f"origin/{branch_name}"],
+                    cwd=worktree_path,
+                    capture_output=True,
+                    timeout=30,
+                    check=True
+                )
+                logger.info(f"Reset worktree to origin/{branch_name}")
+            except subprocess.CalledProcessError as e:
+                # 如果远端分支不存在，尝试 reset 到本地分支
+                logger.warning(f"Failed to reset to origin/{branch_name}, trying local branch: {e.stderr.decode() if e.stderr else str(e)}")
+                try:
+                    subprocess.run(
+                        ["git", "reset", "--hard", branch_name],
+                        cwd=worktree_path,
+                        capture_output=True,
+                        timeout=30,
+                        check=True
+                    )
+                    logger.info(f"Reset worktree to local branch {branch_name}")
+                except subprocess.CalledProcessError as e2:
+                    logger.warning(f"Failed to reset to local branch, continuing anyway: {e2.stderr.decode() if e2.stderr else str(e2)}")
         else:
-            # 强制创建带分支的 Worktree
-            subprocess.run(
-                ["git", "worktree", "add", worktree_path, "-b", branch_name],
-                cwd=project['local_path'],
-                capture_output=True,
-                timeout=30,
-                check=True
-            )
-            logger.info(f"Created worktree at {worktree_path} with branch {branch_name}")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to create worktree: {e.stderr}")
-        conn.close()
-        raise RuntimeError(f"Failed to create worktree: {e.stderr.decode() if e.stderr else str(e)}")
+            # Step 2: Worktree 不存在，需要创建
+            # 首先尝试创建新分支
+            try:
+                subprocess.run(
+                    ["git", "worktree", "add", worktree_path, "-b", branch_name],
+                    cwd=project['local_path'],
+                    capture_output=True,
+                    timeout=30,
+                    check=True
+                )
+                logger.info(f"Created worktree at {worktree_path} with new branch {branch_name}")
+            except subprocess.CalledProcessError as e:
+                error_msg = e.stderr.decode() if e.stderr else str(e)
+
+                # 检查是否是分支已存在的错误
+                if "already exists" in error_msg and "branch" in error_msg:
+                    # 场景 2: 分支已存在，切换到已有分支
+                    logger.info(f"Branch {branch_name} already exists, switching to existing branch")
+                    try:
+                        subprocess.run(
+                            ["git", "worktree", "add", worktree_path, branch_name],
+                            cwd=project['local_path'],
+                            capture_output=True,
+                            timeout=30,
+                            check=True
+                        )
+                        logger.info(f"Created worktree at {worktree_path} using existing branch {branch_name}")
+
+                        # 确保环境清洁
+                        subprocess.run(
+                            ["git", "reset", "--hard", f"origin/{branch_name}"],
+                            cwd=worktree_path,
+                            capture_output=True,
+                            timeout=30,
+                            check=True
+                        )
+                    except subprocess.CalledProcessError as e2:
+                        error_msg2 = e2.stderr.decode() if e2.stderr else str(e2)
+                        logger.error(f"Failed to create worktree with existing branch: {error_msg2}")
+                        conn.close()
+                        raise RuntimeError(f"Failed to create worktree: {error_msg2}")
+                else:
+                    # 其他错误，直接抛出
+                    logger.error(f"Failed to create worktree: {error_msg}")
+                    conn.close()
+                    raise RuntimeError(f"Failed to create worktree: {error_msg}")
+
+        # Step 3: 验证 worktree 最终状态
+        if not os.path.exists(worktree_path):
+            conn.close()
+            raise RuntimeError(f"Worktree creation failed: path {worktree_path} does not exist")
+
+        logger.info(f"Worktree ready at {worktree_path} with branch {branch_name}")
+
     except subprocess.TimeoutExpired:
-        logger.error("Worktree creation timed out")
+        logger.error("Worktree operation timed out")
         conn.close()
-        raise RuntimeError("Worktree creation timed out")
+        raise RuntimeError("Worktree operation timed out")
 
-    # Get footer prompt with explicit branch instruction
-    cursor.execute("SELECT value FROM config WHERE key = 'agent_footer_prompt'")
-    config_result = cursor.fetchone()
-    default_footer = f"""项目路径: {worktree_path}
-
-请在此分支 `{branch_name}` 上进行开发工作。完成后请汇报结果。"""
-    footer_prompt = config_result['value'] if config_result else default_footer
-
-    return _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_path, branch_name, footer_prompt)
+    return _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_path, branch_name)
 
 
-def _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_path, branch_name, footer_prompt):
+def _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_path, branch_name):
     """创建 agent-sdk 模式的 session - 使用 ClaudeSDKClient 支持双向对话"""
     try:
         from claude_agent_sdk import client as sdk_client
@@ -188,13 +264,13 @@ def _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_pat
     if not user_prompt:
         user_prompt = "Please help me with this issue."
 
-    # Build footer prompt
-    cursor.execute("SELECT value FROM config WHERE key = 'agent_footer_prompt'")
-    config_result = cursor.fetchone()
-    if config_result:
-        footer_prompt = config_result['value'].replace('{project_path}', worktree_path)
+    # 环境信息由系统直接注入，不依赖模型推理
+    env_info = f"""项目路径: {worktree_path}
+分支: {branch_name}
 
-    full_prompt = f"{system_prompt}\n\n{user_prompt}\n\n{footer_prompt}"
+请在此分支上进行开发工作。完成后请汇报结果。"""
+
+    full_prompt = f"{system_prompt}\n\n{user_prompt}\n\n{env_info}"
 
     # Create session with branch
     cursor.execute("""
@@ -272,12 +348,16 @@ def _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_pat
             # 必须显式设置为空字符串，不能只是删除（SDK 可能会继承父进程的环境）
             env = dict(os.environ)
             env["CLAUDECODE"] = ""  # 设置为空字符串以允许嵌套运行
+            # 权限豁免：跳过所有交互式权限确认，实现全自动 AIDD 流程
+            env["CLAUDECODE_DANGEROUSLY_SKIP_PERMISSIONS"] = "true"
 
             # Create SDK client with working directory
+            # permission_mode='bypassPermissions' - SDK 原生参数跳过所有权限确认
             options = ClaudeAgentOptions(
                 cwd=worktree,
                 max_turns=100,
                 env=env,
+                permission_mode='bypassPermissions',
             )
 
             async with sdk_client.ClaudeSDKClient(options=options) as client:

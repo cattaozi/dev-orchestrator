@@ -24,21 +24,21 @@ def get_worker(worker_id: int) -> Optional[dict]:
     return None
 
 
-def create_worker(name: str, emoji: str, agent_type: str, prompt_template: str) -> dict:
+def create_worker(name: str, emoji: str, agent_type: str, prompt_template: str, prompt_file_path: str = "") -> dict:
     conn = get_db()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
     cursor.execute("""
-        INSERT INTO workers (name, emoji, agent_type, prompt_template)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO workers (name, emoji, agent_type, prompt_template, prompt_file_path)
+        VALUES (%s, %s, %s, %s, %s)
         RETURNING *
-    """, (name, emoji, agent_type, prompt_template))
+    """, (name, emoji, agent_type, prompt_template, prompt_file_path))
     new_worker = cursor.fetchone()
     conn.commit()
     conn.close()
     return dict(new_worker, created_at=str(new_worker['created_at']))
 
 
-def update_worker(worker_id: int, name: str = None, emoji: str = None, agent_type: str = None, prompt_template: str = None, is_builtin: bool = None) -> dict:
+def update_worker(worker_id: int, name: str = None, emoji: str = None, agent_type: str = None, prompt_template: str = None, prompt_file_path: str = None, is_builtin: bool = None) -> dict:
     conn = get_db()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
 
@@ -62,6 +62,9 @@ def update_worker(worker_id: int, name: str = None, emoji: str = None, agent_typ
     if prompt_template is not None:
         updates.append("prompt_template = %s")
         values.append(prompt_template)
+    if prompt_file_path is not None:
+        updates.append("prompt_file_path = %s")
+        values.append(prompt_file_path)
     if is_builtin is not None:
         updates.append("is_builtin = %s")
         values.append(is_builtin)

@@ -53,6 +53,7 @@ class WorkerResponse(BaseModel):
     emoji: str
     agent_type: str
     prompt_template: str
+    prompt_file_path: str = ""
     is_builtin: bool = False
 
 
@@ -61,6 +62,7 @@ class WorkerCreate(BaseModel):
     emoji: str = ""
     agent_type: str = "claude-code"
     prompt_template: str = ""
+    prompt_file_path: str = ""
 
 
 class WorkerUpdate(BaseModel):
@@ -68,6 +70,7 @@ class WorkerUpdate(BaseModel):
     emoji: Optional[str] = None
     agent_type: Optional[str] = None
     prompt_template: Optional[str] = None
+    prompt_file_path: Optional[str] = None
     is_builtin: Optional[bool] = None
 
 

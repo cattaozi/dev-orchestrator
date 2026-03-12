@@ -5,11 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Save, Loader2 } from "lucide-react"
+import { Save, Loader2, Folder } from "lucide-react"
 
 export default function SettingsPage() {
-  const [footerPrompt, setFooterPrompt] = useState("")
+  const [workerPromptDir, setWorkerPromptDir] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -18,7 +17,7 @@ export default function SettingsPage() {
     fetch("/api/config")
       .then(res => res.json())
       .then(data => {
-        setFooterPrompt(data.agent_footer_prompt || "")
+        setWorkerPromptDir(data.worker_prompt_dir || "")
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -30,7 +29,7 @@ export default function SettingsPage() {
       await fetch("/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_footer_prompt: footerPrompt })
+        body: JSON.stringify({ worker_prompt_dir: workerPromptDir })
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -51,34 +50,28 @@ export default function SettingsPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Configure agent behavior and prompts</p>
+        <p className="text-muted-foreground">Configure system behavior</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Agent Footer Prompt</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Folder className="h-5 w-5" />
+            Worker Prompt Directory
+          </CardTitle>
           <CardDescription>
-            This prompt will be appended to every agent request. Use {"{branch}"} and {"{project_path}"} as placeholders.
+            Default directory for storing worker prompt files. Workers can reference prompt files from this directory.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="footer">Footer Prompt</Label>
-            <Textarea
-              id="footer"
-              value={footerPrompt}
-              onChange={(e) => setFooterPrompt(e.target.value)}
-              placeholder={"请在此分支 {branch} 上进行开发。\n开发完成后，请：\n1. 编写单元测试\n2. 提交代码到 {branch} 分支\n3. 汇报完成状态"}
-              rows={8}
+            <Label htmlFor="promptDir">Directory Path</Label>
+            <Input
+              id="promptDir"
+              value={workerPromptDir}
+              onChange={(e) => setWorkerPromptDir(e.target.value)}
+              placeholder="/home/claude/worker-prompts"
             />
-          </div>
-
-          <div className="text-sm text-muted-foreground space-y-1">
-            <p>Available placeholders:</p>
-            <ul className="list-disc list-inside">
-              <li>{"{branch}"} - Branch name (e.g., task/issue-11)</li>
-              <li>{"{project_path}"} - Project worktree path</li>
-            </ul>
           </div>
 
           <Button onClick={handleSave} disabled={saving}>

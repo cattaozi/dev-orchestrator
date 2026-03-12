@@ -14,6 +14,7 @@ interface Worker {
   emoji: string
   agent_type: string
   prompt_template: string
+  prompt_file_path: string
   is_builtin: boolean
 }
 
@@ -31,6 +32,7 @@ export default function WorkersPage() {
   const [agentType, setAgentType] = useState("claude-code")
   const [emoji, setEmoji] = useState("")
   const [promptTemplate, setPromptTemplate] = useState("")
+  const [promptFilePath, setPromptFilePath] = useState("")
 
   useEffect(() => {
     fetchWorkers()
@@ -56,6 +58,7 @@ export default function WorkersPage() {
     setEmoji("")
     setAgentType("claude-code")
     setPromptTemplate("")
+    setPromptFilePath("")
     setShowDialog(true)
   }
 
@@ -65,6 +68,7 @@ export default function WorkersPage() {
     setEmoji(worker.emoji)
     setAgentType(worker.agent_type)
     setPromptTemplate(worker.prompt_template)
+    setPromptFilePath(worker.prompt_file_path || "")
     setShowDialog(true)
   }
 
@@ -75,7 +79,8 @@ export default function WorkersPage() {
         name,
         emoji,
         agent_type: agentType,
-        prompt_template: promptTemplate
+        prompt_template: promptTemplate,
+        prompt_file_path: promptFilePath
       }
 
       let res
@@ -190,6 +195,11 @@ export default function WorkersPage() {
                 </div>
               </CardHeader>
               <CardContent className="py-2">
+                {worker.prompt_file_path && (
+                  <p className="text-xs text-muted-foreground mb-2 font-mono">
+                    📄 {worker.prompt_file_path}
+                  </p>
+                )}
                 <pre className="text-sm text-muted-foreground whitespace-pre-wrap">
                   {worker.prompt_template || '(No prompt template)'}
                 </pre>
@@ -243,6 +253,18 @@ export default function WorkersPage() {
                 placeholder="System prompt for the agent..."
                 className="w-full min-h-[120px] p-3 text-sm border rounded-md mt-1"
               />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Prompt File Path</label>
+              <Input
+                value={promptFilePath}
+                onChange={(e) => setPromptFilePath(e.target.value)}
+                placeholder="/path/to/prompt.txt"
+                className="mt-1 font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional: Load system prompt from file instead of template above
+              </p>
             </div>
           </div>
           <DialogFooter>

@@ -15,7 +15,7 @@ def list_workers():
 @router.post("/api/workers", response_model=WorkerResponse)
 def create_worker(worker: WorkerCreate):
     try:
-        return worker_service.create_worker(worker.name, worker.emoji, worker.agent_type, worker.prompt_template)
+        return worker_service.create_worker(worker.name, worker.emoji, worker.agent_type, worker.prompt_template, worker.prompt_file_path)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -37,6 +37,7 @@ def update_worker(worker_id: int, worker_update: WorkerUpdate):
             emoji=worker_update.emoji,
             agent_type=worker_update.agent_type,
             prompt_template=worker_update.prompt_template,
+            prompt_file_path=worker_update.prompt_file_path,
             is_builtin=worker_update.is_builtin
         )
     except ValueError as e:

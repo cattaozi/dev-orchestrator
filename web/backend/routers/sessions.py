@@ -58,7 +58,8 @@ def get_session_events(session_id: int, after_id: int = 0):
     session = session_service.get_session_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return session_service.get_session_events(session_id, after_id)
+    events = session_service.get_session_events(session_id, after_id)
+    return {"events": events, "status": session["status"]}
 
 
 @router.get("/{session_id}/history")

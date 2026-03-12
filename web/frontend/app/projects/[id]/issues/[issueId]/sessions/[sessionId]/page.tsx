@@ -482,7 +482,7 @@ export default function SessionDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            {formatDateTime(session.created_at)}
+            {formatDateTime(session.started_at)}
           </span>
           {/* More actions dropdown */}
           <div className="relative" ref={menuRef}>
@@ -555,7 +555,7 @@ export default function SessionDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Created:</span>
-                <span>{formatDateTime(session.created_at)}</span>
+                <span>{formatDateTime(session.started_at)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Prompt:</span>
