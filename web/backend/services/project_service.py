@@ -38,7 +38,7 @@ def create_project(name: str, description: str, repo: str, local_path: str, defa
         INSERT INTO projects (name, description, repo, local_path, default_branch, favorited)
         VALUES (%s, %s, %s, %s, %s, %s)
         RETURNING *
-    """, (name, description, repo, local_path, default_branch, favorited))
+    """, (name, description or "", repo or "", local_path, default_branch or "main", favorited))
     new_project = cursor.fetchone()
     conn.commit()
     conn.close()

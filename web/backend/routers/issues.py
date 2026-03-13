@@ -24,7 +24,7 @@ def create_issue(project_id: int, issue: IssueCreate):
     try:
         return issue_service.create_issue(project_id, issue.title, issue.content)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.patch("/{issue_id}", response_model=IssueResponse)
@@ -37,7 +37,7 @@ def update_issue(project_id: int, issue_id: int, issue_update: IssueUpdate):
             status=issue_update.status
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/{issue_id}")
@@ -46,7 +46,7 @@ def delete_issue(project_id: int, issue_id: int):
         issue_service.delete_issue(project_id, issue_id)
         return {"message": "Issue deleted"}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/{issue_id}/worktree")

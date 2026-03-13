@@ -55,12 +55,7 @@ export default function ProjectsPage() {
     try {
       const res = await fetch(`/api/projects/${projectId}/favorite`, { method: 'POST' })
       if (res.ok) {
-        const data = await res.json()
-        // Update local state
-        const updatedProjects = projects.map(p =>
-          p.id === projectId ? { ...p, favorited: data.favorited } : p
-        )
-        // Use a simple approach - just refetch
+        // Just refetch to get updated data
         fetchProjects()
       }
     } catch (e) {
@@ -68,8 +63,9 @@ export default function ProjectsPage() {
     }
   }
 
-  const favoritedProjects = projects.filter(p => p.favorited)
-  const normalProjects = projects.filter(p => !p.favorited)
+  const projectList = projects || []
+  const favoritedProjects = projectList.filter(p => p.favorited)
+  const normalProjects = projectList.filter(p => !p.favorited)
 
   return (
     <div className="space-y-6">
@@ -86,7 +82,7 @@ export default function ProjectsPage() {
 
       {loading ? (
         <div className="text-center py-10 text-muted-foreground">Loading...</div>
-      ) : projects.length === 0 ? (
+      ) : projectList.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-10">
             <FolderGit2 className="h-12 w-12 text-muted-foreground mb-4" />
