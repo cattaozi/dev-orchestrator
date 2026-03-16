@@ -8,7 +8,7 @@ DevPilot 是一个 AI 驱动的开发编排系统，用户通过自然语言与 
 
 - **前端**: Next.js 14 + shadcn/ui + Tailwind CSS
 - **后端**: Python FastAPI + PostgreSQL
-- **端口**: 前端 4000，后端 8000
+- **端口**: 前端 4000，后端 7000
 
 ## 目录结构
 
@@ -84,10 +84,28 @@ npm run dev
 - PostgreSQL 数据库: `dev_orchestrator`
 - 连接信息: postgresql://luca:MAZV1QjTbXyPTq1teRFaEH0T@localhost:5432/dev_orchestrator
 
+## 编码规范加载规则（Agent 必读）
+
+为减少上下文长度并提升命中率，编码时按修改范围加载规范：
+
+1. 修改 `web/frontend/**` 时，优先遵循 `docs/best-practices/frontend.md`
+2. 修改 `web/backend/**` 或 `storage/**` 时，优先遵循 `docs/best-practices/backend.md`
+3. 同时修改前后端时，两份规范都要遵循
+4. 规则冲突时优先级：`CLAUDE.md` > `docs/best-practices/*.md` > 代码内注释
+
+## 强制约束（高优先级）
+
+1. 禁止硬编码环境配置（后端地址、端口、密钥、连接串）；必须走环境变量与配置层
+2. 新增配置项时，必须同步更新 `.env.example` 与相关 README 文档
+3. 前端危险操作必须使用自定义 Dialog 二次确认，禁止浏览器原生 `confirm()`
+4. Markdown 渲染必须使用 `@/components/ui/markdown`，禁止直接使用 `react-markdown`
+5. FastAPI 路由定义必须遵守“具体在前、泛化在后”
+6. API 代理层（`web/frontend/app/api`）仅做转发/协议转换，不承载复杂业务逻辑
+
 ## 开发注意事项
 
-1. 前端通过 Next.js API 代理访问后端 (http://127.0.0.1:8000)
-2. 前端页面端口 4000，后端内部端口 8000
+1. 前端通过 Next.js API 代理访问后端 (http://127.0.0.1:7000)
+2. 前端页面端口 4000，后端内部端口 7000
 3. 用户只访问前端页面，后端对用户不可见
 4. 删除等危险操作必须使用自定义 Dialog 组件确认，禁止使用浏览器原生 confirm()
 5. Markdown 渲染使用 `@/components/ui/markdown` 组件，禁止直接使用 react-markdown

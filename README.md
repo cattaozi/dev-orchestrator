@@ -239,24 +239,46 @@ POST   /api/kill                  # do kill 等价
 
 ## 7. 快速开始
 
+### 7.1 配置环境变量
+
 ```bash
 # 进入项目目录
 cd /data/repo/dev-orchestrator
 
+# 复制根目录配置（数据库 + 后端 host/port）
+cp .env.example .env
+
+# 复制前端配置（Next API 代理后端地址）
+cp web/frontend/.env.example web/frontend/.env.local
+```
+
+关键配置项：
+
+- `DATABASE_URL`：PostgreSQL 连接串
+- `BACKEND_HOST`：后端监听地址，默认 `0.0.0.0`
+- `BACKEND_PORT`：后端监听端口，默认 `7000`
+- `BACKEND_ORIGIN`：前端代理到后端的地址，默认 `http://127.0.0.1:7000`
+
+### 7.2 安装与启动
+
+```bash
 # 安装 Python 依赖
-pip install -e ".[dev]"
+uv sync
 
 # 安装前端依赖
-cd frontend && npm install
+cd web/frontend && npm install
+```
 
-# 初始化数据库
-python -c "from storage.database import init_db; init_db()"
+```bash
+# 启动后端（新终端 1）
+cd /data/repo/dev-orchestrator
+uv run python web/backend/main.py
+```
 
-# 启动后端
-python -m uvicorn web.backend.main:app --reload
-
-# 启动前端 (新终端)
-cd frontend && npm run dev
+```bash
+# 启动前端（新终端 2）
+cd /data/repo/dev-orchestrator/web/frontend
+npm run dev
 ```
 
 ---
