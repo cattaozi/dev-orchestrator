@@ -2,22 +2,16 @@
 
 import { useState } from 'react'
 import { ParsedMessage } from '@/lib/message-parser'
-import { Badge } from '@/components/ui/badge'
 import { ChevronDown, ChevronRight, Terminal } from 'lucide-react'
 
 // Thinking Block - AI thinking process (always expanded)
 export function ThinkingCard({ message }: { message: ParsedMessage }) {
   return (
-    <div className="border border-zinc-800 rounded my-1 overflow-hidden">
-      <div className="flex items-center gap-2 px-2 py-1 bg-zinc-900/50 text-zinc-400">
-        <span className="text-sm">🧠</span>
-        <span className="text-sm font-mono">Thinking</span>
-      </div>
-      <div className="px-2 pb-2 border-t border-zinc-800">
-        <pre className="text-sm text-zinc-300 whitespace-pre-wrap font-mono mt-2">
-          {message.thinking}
-        </pre>
-      </div>
+    <div className="my-1 pl-2 border-l border-zinc-700">
+      <div className="text-[11px] uppercase tracking-wide text-zinc-500">thinking</div>
+      <pre className="mt-1 text-[13px] leading-6 text-zinc-400 whitespace-pre-wrap font-mono">
+        {message.thinking}
+      </pre>
     </div>
   )
 }
@@ -28,7 +22,7 @@ export function TextCard({ message }: { message: ParsedMessage }) {
 
   return (
     <div className="my-2">
-      <div className="text-sm text-zinc-100 whitespace-pre-wrap">
+      <div className="text-[13px] leading-6 text-zinc-100 whitespace-pre-wrap">
         {message.text}
       </div>
     </div>
@@ -38,10 +32,10 @@ export function TextCard({ message }: { message: ParsedMessage }) {
 // Tool Use Block - calling a tool (simplified to one line)
 export function ToolUseCard({ message }: { message: ParsedMessage }) {
   return (
-    <div className="text-sm text-zinc-400 my-0.5">
-      <span className="text-zinc-500">🔧</span>{' '}
-      <span className="text-zinc-300">{message.toolName}</span>
-      {message.toolId && <span className="text-zinc-600"> #{message.toolId.slice(0, 6)}</span>}
+    <div className="text-[13px] leading-6 text-zinc-300 my-1 font-mono">
+      <span className="text-zinc-500">&gt; tool</span>{' '}
+      <span className="text-zinc-200">{message.toolName}</span>
+      {message.toolId && <span className="text-zinc-500"> #{message.toolId.slice(0, 6)}</span>}
     </div>
   )
 }
@@ -64,48 +58,26 @@ export function ToolResultCard({ message }: { message: ParsedMessage }) {
   }
 
   return (
-    <div className={`border rounded my-1 overflow-hidden ${
-      message.isError ? 'border-red-900' : 'border-zinc-800'
-    }`}>
+    <div className="my-1">
       <button
         onClick={() => setExpanded(!expanded)}
-        className={`w-full flex items-center gap-2 px-2 py-1 hover:bg-zinc-900 transition-colors text-left ${
-          message.isError ? 'bg-red-950/30' : ''
-        }`}
+        className="w-full flex items-center gap-2 px-1 py-1 text-left hover:bg-zinc-900 rounded-sm"
       >
-        <Terminal className={`h-3 w-3 ${message.isError ? 'text-red-400' : 'text-zinc-400'}`} />
-        <span className={`text-sm font-mono ${message.isError ? 'text-red-300' : 'text-zinc-300'}`}>
-          result
-        </span>
-        {message.isError && (
-          <Badge variant="destructive" className="text-[10px] h-4">error</Badge>
-        )}
-        {/* 显示 diff 统计 */}
+        <Terminal className={`h-3.5 w-3.5 ${message.isError ? 'text-red-400' : 'text-zinc-500'}`} />
+        <span className={`text-[13px] font-medium ${message.isError ? 'text-red-300' : 'text-zinc-300'}`}>result</span>
+        {message.isError && <span className="text-[11px] text-red-400 uppercase">error</span>}
         {isDiff && !expanded && (
           <>
-            {diffAdded > 0 && <span className="text-sm text-green-500">+{diffAdded}</span>}
-            {diffDeleted > 0 && <span className="text-sm text-red-500">-{diffDeleted}</span>}
+            {diffAdded > 0 && <span className="text-xs text-emerald-400">+{diffAdded}</span>}
+            {diffDeleted > 0 && <span className="text-xs text-red-400">-{diffDeleted}</span>}
           </>
         )}
-        {!isDiff && isLong && !expanded && (
-          <span className="text-sm text-zinc-600 ml-auto">
-            {lines.length} lines
-          </span>
-        )}
-        {expanded ? (
-          <ChevronDown className="h-3 w-3 ml-auto text-zinc-500" />
-        ) : (
-          <ChevronRight className="h-3 w-3 ml-auto text-zinc-500" />
-        )}
+        {!isDiff && isLong && !expanded && <span className="text-xs text-zinc-500 ml-auto">{lines.length} lines</span>}
+        {expanded ? <ChevronDown className="h-3 w-3 ml-auto text-zinc-500" /> : <ChevronRight className="h-3 w-3 ml-auto text-zinc-500" />}
       </button>
       {expanded && (
-        <div className={`px-2 pb-2 border-t ${
-          message.isError ? 'border-red-900 bg-red-950/20' :
-          isDiff ? 'border-zinc-700 bg-zinc-900/50' : 'border-zinc-800'
-        }`}>
-          <pre className={`text-sm font-mono whitespace-pre-wrap mt-2 ${
-            message.isError ? 'text-red-200' : 'text-zinc-300'
-          }`}>
+        <div className="mt-1 ml-5 border-l border-zinc-700 pl-2">
+          <pre className={`text-[13px] font-mono whitespace-pre-wrap ${message.isError ? 'text-red-300' : 'text-zinc-200'}`}>
             {isDiff ? (
               <div className="space-y-0">
                 {content.split('\n').map((line, i) => (
@@ -125,13 +97,13 @@ export function ToolResultCard({ message }: { message: ParsedMessage }) {
 // Diff line component - git standard colors (with background)
 function DiffLine({ line }: { line: string }) {
   if (line.startsWith('+') && !line.startsWith('+++')) {
-    return <div key={line} className="bg-green-900/30 text-green-400">{line}</div>
+    return <div key={line} className="text-emerald-300">{line}</div>
   }
   if (line.startsWith('-') && !line.startsWith('---')) {
-    return <div key={line} className="bg-red-900/30 text-red-400">{line}</div>
+    return <div key={line} className="text-red-300">{line}</div>
   }
   if (line.startsWith('@@')) {
-    return <div key={line} className="bg-yellow-900/30 text-yellow-400 font-semibold">{line}</div>
+    return <div key={line} className="text-amber-300 font-semibold">{line}</div>
   }
   // diff header lines
   if (line.startsWith('diff ') || line.startsWith('index ') || line.startsWith('---') || line.startsWith('+++')) {
@@ -145,15 +117,10 @@ export function SystemReminderCard({ message }: { message: ParsedMessage }) {
   if (!message.reminderText) return null
 
   return (
-    <div className="border border-yellow-900 bg-yellow-950/30 rounded my-2">
-      <div className="flex items-center gap-2 px-2 py-1 border-b border-yellow-900/50">
-        <span className="text-sm">⚠️</span>
-        <span className="text-sm text-yellow-400">System Reminder</span>
-      </div>
-      <div className="px-2 py-1">
-        <div className="text-sm text-yellow-200 whitespace-pre-wrap">
-          {message.reminderText}
-        </div>
+    <div className="my-1 border-l border-amber-400/60 pl-2">
+      <div className="text-[11px] uppercase tracking-wide text-amber-300">system</div>
+      <div className="text-[13px] leading-6 text-amber-200 whitespace-pre-wrap">
+        {message.reminderText}
       </div>
     </div>
   )
@@ -165,21 +132,21 @@ export function TodoItemCard({ message }: { message: ParsedMessage }) {
                      message.todoStatus === 'in_progress' ? '→' : '○'
 
   return (
-    <div className="border border-zinc-800 rounded my-1">
-      <div className="flex items-center gap-2 px-2 py-1">
+    <div className="my-1 pl-2">
+      <div className="flex items-center gap-2">
         <span className="text-sm text-zinc-500">{statusIcon}</span>
-        <span className="text-sm text-zinc-400">Todo</span>
+        <span className="text-sm text-zinc-300">todo</span>
         {message.todoStatus && (
           <span className={`text-sm ${
-            message.todoStatus === 'completed' ? 'text-green-500' :
-            message.todoStatus === 'in_progress' ? 'text-blue-500' : 'text-zinc-500'
+            message.todoStatus === 'completed' ? 'text-green-400' :
+            message.todoStatus === 'in_progress' ? 'text-blue-400' : 'text-zinc-500'
           }`}>
             [{message.todoStatus}]
           </span>
         )}
       </div>
-      <div className="px-2 pb-1 border-t border-zinc-800">
-        <div className="text-sm text-zinc-300">
+      <div className="pl-5">
+        <div className="text-sm text-zinc-200">
           {message.todoContent}
         </div>
         {message.todoActiveForm && (
@@ -195,15 +162,14 @@ export function TodoItemCard({ message }: { message: ParsedMessage }) {
 // Persisted Output Block - large file output
 export function PersistedOutputCard({ message }: { message: ParsedMessage }) {
   const [expanded, setExpanded] = useState(false)
-  const isDiff = message.preview?.includes('@@') || message.preview?.includes('+++')
 
   return (
-    <div className="border border-zinc-800 rounded my-1 overflow-hidden">
+    <div className="my-1">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-2 py-1 hover:bg-zinc-900 transition-colors text-left"
+        className="w-full flex items-center gap-2 px-1 py-1 hover:bg-zinc-900 rounded-sm transition-colors text-left"
       >
-        <span className="text-sm text-zinc-400">📁</span>
+        <span className="text-xs uppercase tracking-wide text-zinc-500">file</span>
         <span className="text-sm font-mono text-zinc-300">output</span>
         {message.filePath && (
           <span className="text-sm text-zinc-500 ml-1">{message.filePath}</span>
@@ -215,8 +181,8 @@ export function PersistedOutputCard({ message }: { message: ParsedMessage }) {
         )}
       </button>
       {expanded && (
-        <div className="px-2 pb-2 border-t border-zinc-800">
-          <pre className="text-sm text-zinc-300 font-mono whitespace-pre-wrap mt-2">
+        <div className="mt-1 ml-5 border-l border-zinc-700 pl-2">
+          <pre className="text-sm text-zinc-200 font-mono whitespace-pre-wrap">
             {message.preview || '(no preview)'}
           </pre>
         </div>
@@ -228,7 +194,7 @@ export function PersistedOutputCard({ message }: { message: ParsedMessage }) {
 // Unknown Block - fallback
 export function UnknownCard({ message }: { message: ParsedMessage }) {
   return (
-    <div className="border border-zinc-800 rounded my-1 p-2">
+    <div className="my-1 pl-2">
       <pre className="text-sm text-zinc-400 whitespace-pre-wrap">
         {message.raw}
       </pre>

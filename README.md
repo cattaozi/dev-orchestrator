@@ -256,8 +256,8 @@ cp web/frontend/.env.example web/frontend/.env.local
 
 - `DATABASE_URL`：PostgreSQL 连接串
 - `BACKEND_HOST`：后端监听地址，默认 `0.0.0.0`
-- `BACKEND_PORT`：后端监听端口，默认 `7000`
-- `BACKEND_ORIGIN`：前端代理到后端的地址，默认 `http://127.0.0.1:7000`
+- `BACKEND_PORT`：后端监听端口，默认 `17000`
+- `BACKEND_ORIGIN`：前端代理到后端的地址，默认 `http://127.0.0.1:17000`
 
 ### 7.2 安装与启动
 

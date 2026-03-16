@@ -173,6 +173,13 @@ export function parseEventContent(content: string): ParsedMessage[] {
     }
   }
 
+  // Preserve the original block order in raw message.
+  const getOffset = (id: string): number => {
+    const idx = Number(id.split('-').pop())
+    return Number.isFinite(idx) ? idx : 0
+  }
+  messages.sort((a, b) => getOffset(a.id) - getOffset(b.id))
+
   // If no blocks found, treat entire content as text
   if (messages.length === 0 && cleanContent.trim()) {
     messages.push({

@@ -15,6 +15,58 @@ from psycopg2.extras import RealDictCursor
 # Structure: {session_id: {"client": client, "loop": event_loop, "db_conn": db_connection}}
 sdk_clients = {}
 
+NOISE_SYSTEM_SUBTYPES = ("init", "status", "compact_boundary")
+
+
+def _detect_event_type(raw_content: str, role: str) -> str:
+    """Infer a stable event_type from SDK raw message."""
+    raw = (raw_content or "").strip()
+    if role == "user":
+        return "user_message"
+    if raw.startswith("AssistantMessage("):
+        return "assistant_message"
+    if raw.startswith("SystemMessage("):
+        return "system_message"
+    if raw.startswith("ResultMessage("):
+        return "result_message"
+    if raw.startswith("TaskStartedMessage("):
+        return "task_started"
+    if raw.startswith("TaskNotificationMessage("):
+        return "task_notification"
+    return "message"
+
+
+def _is_noise_event(raw_content: str, role: str) -> bool:
+    """
+    Filter low-signal SDK events before persistence.
+    Keep user messages and meaningful assistant output.
+    """
+    raw = (raw_content or "").strip()
+    if not raw:
+        return True
+
+    if role == "user":
+        return False
+
+    if raw.startswith("TaskStartedMessage(") or raw.startswith("TaskNotificationMessage("):
+        return True
+
+    if raw.startswith("SystemMessage("):
+        return any(f"subtype='{subtype}'" in raw for subtype in NOISE_SYSTEM_SUBTYPES)
+
+    if raw.startswith("ResultMessage(") and "subtype='success'" in raw:
+        return True
+
+    if (
+        "ThinkingBlock(" in raw
+        and "TextBlock(" not in raw
+        and "ToolUseBlock(" not in raw
+        and "ToolResultBlock(" not in raw
+    ):
+        return True
+
+    return False
+
 
 def _validate_path(path: str) -> bool:
     """校验路径安全：防止路径遍历攻击"""
@@ -298,8 +350,8 @@ def _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_pat
     # Store initial message as event
     cursor.execute("""
         INSERT INTO session_events (session_id, event_type, role, content)
-        VALUES (%s, 'message', 'user', %s)
-    """, (session_id, full_prompt))
+        VALUES (%s, %s, 'user', %s)
+    """, (session_id, _detect_event_type(full_prompt, "user"), full_prompt))
 
     # 更新 issue 表的 worktree 和 branch
     cursor.execute("""
@@ -322,11 +374,14 @@ def _create_agent_sdk_session(cursor, conn, issue, project, worker, worktree_pat
         # 定义线程内复用的保存函数（使用同一个 db_conn）
         def save_message(role, content):
             """线程内复用连接保存消息"""
+            if _is_noise_event(content, role):
+                return
             try:
+                event_type = _detect_event_type(content, role)
                 with db_conn.cursor() as cursor:
                     cursor.execute(
-                        "INSERT INTO session_events (session_id, event_type, role, content) VALUES (%s, 'message', %s, %s)",
-                        (sid, role, content)
+                        "INSERT INTO session_events (session_id, event_type, role, content) VALUES (%s, %s, %s, %s)",
+                        (sid, event_type, role, content)
                     )
                 db_conn.commit()
             except Exception as e:
@@ -563,6 +618,7 @@ def get_session_events(session_id: int, after_id: int = 0):
             "created_at": str(e["created_at"]) if e["created_at"] else None
         }
         for e in events
+        if not _is_noise_event(e.get("content") or "", e.get("role") or "")
     ]
 
 
@@ -589,6 +645,7 @@ def get_session_history(session_id: int):
             "created_at": str(e["created_at"]) if e["created_at"] else None
         }
         for e in events
+        if not _is_noise_event(e.get("content") or "", e.get("role") or "")
     ]
 
 
@@ -610,8 +667,8 @@ def send_session_message(session_id: int, role: str, content: str):
     # Store message
     cursor.execute("""
         INSERT INTO session_events (session_id, event_type, role, content)
-        VALUES (%s, 'message', %s, %s)
-    """, (session_id, role, content))
+        VALUES (%s, %s, %s, %s)
+    """, (session_id, _detect_event_type(content, role), role, content))
     conn.commit()
     conn.close()
 
@@ -625,20 +682,14 @@ def send_session_message(session_id: int, role: str, content: str):
         async def _send_msg_task():
             """Async task to send message via SDK client"""
             try:
-                async for msg in await client.query(content):
-                    msg_content = str(msg)
-                    # 使用线程复用的数据库连接保存消息
-                    if db_conn:
-                        try:
-                            with db_conn.cursor() as cursor:
-                                cursor.execute(
-                                    "INSERT INTO session_events (session_id, event_type, role, content) VALUES (%s, 'message', %s, %s)",
-                                    (session_id, 'assistant', msg_content)
-                                )
-                            db_conn.commit()
-                        except Exception as e:
-                            logger.error(f"DB Insert Error: {e}")
-                            db_conn.rollback()
+                # Best-effort: interrupt current generation first to avoid old-turn tail events.
+                try:
+                    await client.interrupt()
+                except Exception as interrupt_error:
+                    logger.warning(f"Interrupt before new query failed (continuing): {interrupt_error}")
+
+                # Let SDK receive and persist response in the existing receive_messages loop.
+                await client.query(content)
             except Exception as e:
                 logger.error(f"Error sending message via SDK: {e}")
 

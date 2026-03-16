@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
 import { ArrowLeft, Loader2, Send, Circle, Square, X, ExternalLink, Trash2, MoreHorizontal, Info, User, Bot, ChevronDown, ChevronRight } from "lucide-react"
-import { parseEventContent, ParsedMessage } from "@/lib/message-parser"
-import { MessageCard } from "@/components/message-cards"
+import ReactMarkdown from "react-markdown"
+import { parseEventContent } from "@/lib/message-parser"
 
 interface Session {
   id: number
@@ -29,13 +29,81 @@ interface Session {
 
 interface SessionEvent {
   id: number
-  type: string
+  event_type: string
   role: string
   content: string
   tool_name: string
   tool_input: string
-  data: unknown
   created_at: string
+}
+
+interface ConversationItem {
+  id: string
+  type: 'user' | 'assistant'
+  text: string
+}
+
+function normalizeEventContent(content: string): string {
+  return (content || '').replace(/\\n/g, '\n').trim()
+}
+
+function extractToolResultTextBlocks(rawContent: string): string[] {
+  const texts: string[] = []
+  const regex = /'text':\s*'((?:[^'\\]|\\.)*)'/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(rawContent)) !== null) {
+    const unescaped = match[1]
+      .replace(/\\n/g, '\n')
+      .replace(/\\'/g, "'")
+      .trim()
+    if (unescaped) texts.push(unescaped)
+  }
+  return texts
+}
+
+function isInternalToolErrorText(text: string): boolean {
+  return (
+    text.includes('API Error:') ||
+    text.includes('request_id') ||
+    text.includes('agentId:') ||
+    text.includes('invalid_parameter_error') ||
+    text.includes('not supported')
+  )
+}
+
+function isNoiseEvent(event: SessionEvent): boolean {
+  const content = normalizeEventContent(event.content)
+  if (!content) return true
+
+  if (event.role === 'user') return false
+
+  if (content.startsWith('TaskStartedMessage(') || content.startsWith('TaskNotificationMessage(')) {
+    return true
+  }
+
+  if (
+    content.startsWith('SystemMessage(') &&
+    (content.includes("subtype='init'") ||
+      content.includes("subtype='status'") ||
+      content.includes("subtype='compact_boundary'"))
+  ) {
+    return true
+  }
+
+  if (content.startsWith('ResultMessage(') && content.includes("subtype='success'")) {
+    return true
+  }
+
+  if (
+    content.includes('ThinkingBlock(') &&
+    !content.includes('TextBlock(') &&
+    !content.includes('ToolUseBlock(') &&
+    !content.includes('ToolResultBlock(')
+  ) {
+    return true
+  }
+
+  return false
 }
 
 export default function SessionDetailPage() {
@@ -91,16 +159,70 @@ export default function SessionDetailPage() {
 
   // Track if new events were added (for scroll logic)
   const prevEventsLengthRef = useRef(0)
+  const visibleEvents = useMemo(
+    () => events.filter((event) => !isNoiseEvent(event)),
+    [events]
+  )
+  const conversationItems = useMemo<ConversationItem[]>(() => {
+    const items: ConversationItem[] = []
 
+    for (const event of visibleEvents) {
+      const rawContent = normalizeEventContent(event.content || '')
+      if (!rawContent) continue
+
+      if (event.role === 'user') {
+        items.push({
+          id: `u-${event.id}`,
+          type: 'user',
+          text: rawContent,
+        })
+        continue
+      }
+
+      const parsed = parseEventContent(rawContent)
+      const textParts: string[] = []
+
+      parsed.forEach((message) => {
+        if (message.type === 'text' && message.text) {
+          textParts.push(message.text)
+        }
+        if (message.type === 'system_reminder' && message.reminderText) {
+          textParts.push(message.reminderText)
+        }
+      })
+
+      // Some SDK events wrap tool results in raw objects; extract user-readable text and suppress internal transport noise.
+      if (textParts.length === 0 && rawContent.includes('ToolResultBlock')) {
+        const toolTexts = extractToolResultTextBlocks(rawContent)
+        const visibleToolTexts = toolTexts.filter((t) => !isInternalToolErrorText(t))
+        textParts.push(...visibleToolTexts)
+      }
+
+      if (textParts.length > 0) {
+        items.push({
+          id: `a-${event.id}`,
+          type: 'assistant',
+          text: textParts.join('\n\n').trim(),
+        })
+      }
+    }
+
+    return items
+  }, [visibleEvents])
+  const isWaitingForAssistant = useMemo(() => {
+    if (session?.status !== 'running') return false
+    if (conversationItems.length === 0) return true
+    return conversationItems[conversationItems.length - 1].type === 'user'
+  }, [conversationItems, session?.status])
   // Auto-scroll to bottom only when autoScroll is enabled AND new events were added
   useEffect(() => {
-    const newEventsAdded = events.length > prevEventsLengthRef.current
-    prevEventsLengthRef.current = events.length
+    const newEventsAdded = visibleEvents.length > prevEventsLengthRef.current
+    prevEventsLengthRef.current = visibleEvents.length
 
     if (autoScroll && newEventsAdded && eventsEndRef.current) {
       eventsEndRef.current.scrollIntoView({ behavior: "auto" })
     }
-  }, [events, autoScroll])
+  }, [visibleEvents, autoScroll])
 
   // Polling for agent-sdk/stream-json mode
   useEffect(() => {
@@ -573,9 +695,9 @@ export default function SessionDetailPage() {
       )}
 
       {/* Log Output */}
-      <Card className="h-[60vh] flex flex-col">
-        <CardHeader className="py-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-base">日志输出</CardTitle>
+      <Card className="h-[60vh] flex flex-col border-zinc-800 bg-zinc-900 text-zinc-100">
+        <CardHeader className="py-3 flex flex-row items-center justify-between border-b border-zinc-800 bg-zinc-950">
+          <CardTitle className="text-base font-mono text-zinc-100">日志输出</CardTitle>
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -583,113 +705,59 @@ export default function SessionDetailPage() {
               onChange={(e) => setAutoScroll(e.target.checked)}
               className="w-4 h-4 rounded cursor-pointer"
             />
-            <span className="text-xs text-muted-foreground">自动滚动</span>
+            <span className="text-xs text-zinc-400 font-mono">auto-scroll</span>
           </label>
         </CardHeader>
-        <CardContent className="flex-1 overflow-hidden p-0 border-t">
+        <CardContent className="flex-1 overflow-hidden p-0">
           <div
             ref={containerRef}
             onScroll={handleScroll}
-            className="h-full overflow-y-auto p-4 bg-black text-zinc-100 font-mono"
+            className="h-full overflow-y-auto p-4 bg-zinc-900 font-mono"
           >
-            {events.length === 0 ? (
+            {conversationItems.length === 0 ? (
               <div className="text-center text-zinc-500 py-10">
                 <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
                 <p>等待 Agent 响应...</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {events.map((event) => {
-                  // Parse event content into messages
-                  const messages = parseEventContent(event.content || '')
-                  const isUser = event.role === 'user'
-
+              <div className="space-y-0">
+                {conversationItems.map((item) => {
                   return (
                     <div
-                      key={event.id}
-                      className={`mb-2 ${isUser ? 'ml-auto max-w-[80%]' : ''}`}
+                      key={item.id}
+                      className={`${item.type === 'user' ? 'py-2.5' : 'py-2'} border-b border-zinc-800/80`}
                     >
-                      {/* User message - special style */}
-                      {isUser && (
-                        <div className="border border-zinc-600 rounded px-2 py-1 bg-zinc-800/50">
-                          <div className="text-sm text-zinc-100 whitespace-pre-wrap">
-                            {event.content.replace(/\\n/g, '\n')}
+                      {item.type === 'user' ? (
+                        <div className="flex items-start gap-2 rounded-md bg-emerald-900/20 px-2 py-1.5">
+                          <span className="mt-1 h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+                          <div className="min-w-0 flex-1 text-[13px] leading-6 text-zinc-100">
+                            <ReactMarkdown
+                              components={{
+                                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                                code: ({ children }) => <code className="rounded bg-zinc-800 px-1 py-0.5 text-zinc-100">{children}</code>,
+                                pre: ({ children }) => <pre className="my-2 overflow-x-auto rounded bg-zinc-950 p-2 text-zinc-100">{children}</pre>,
+                              }}
+                            >
+                              {item.text}
+                            </ReactMarkdown>
                           </div>
                         </div>
-                      )}
-
-                      {/* Agent message - just cards */}
-                      {!isUser && (
-                        <div>
-                          {(() => {
-                            // 优先使用后端解析好的 data 字段
-                            const data = event.data as Array<{
-                              type: string
-                              thinking?: string
-                              signature?: string
-                              text?: string
-                              name?: string
-                              id?: string
-                              tool_use_id?: string
-                              content?: string
-                              is_error?: boolean
-                              diff_stats?: { added: number; deleted: number }
-                              line_count?: number
-                              input?: Record<string, unknown>
-                            }> | null
-
-                            // 如果有解析好的 data，直接使用
-                            if (data && data.length > 0) {
-                              return data.map((block, idx) => (
-                                <ParsedBlock key={`${event.id}-${idx}`} block={block} />
-                              ))
-                            }
-
-                            // 后备：使用旧的解析方式
-                            const rawContent = event.content.replace(/\\n/g, '\n')
-                            const lines = rawContent.split('\n')
-                            const isBlockFormat = rawContent.includes('[ToolUseBlock') || rawContent.includes('[ToolResultBlock')
-                            const isJsonArrayContent = rawContent.match(/content=\[/)
-
-                            if (isJsonArrayContent && lines.length > 2) {
-                              return (
-                                <CollapsedBlock
-                                  content={rawContent}
-                                  lineCount={lines.length}
-                                />
-                              )
-                            }
-
-                            if (messages.length > 0) {
-                              return messages.map((msg, idx) => (
-                                <div key={`${event.id}-${idx}`}>
-                                  <MessageCard message={msg} />
-                                </div>
-                              ))
-                            }
-
-                            // 消息解析失败时，如果是块格式且超过2行，收缩显示
-                            if (isBlockFormat && lines.length > 2) {
-                              return (
-                                <CollapsedBlock
-                                  content={rawContent}
-                                  lineCount={lines.length}
-                                />
-                              )
-                            }
-
-                            // 否则直接显示
-                            return (
-                              <pre className="whitespace-pre-wrap break-all text-sm text-zinc-300">
-                                {rawContent}
-                              </pre>
-                          )
-                        })()}
+                      ) : (
+                        <div className="flex items-start gap-2">
+                          <span className="mt-1 h-2 w-2 rounded-full bg-sky-400 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <AgentMessageText text={item.text} />
+                          </div>
                         </div>
                       )}
                     </div>
                   )
                 })}
+                {isWaitingForAssistant && (
+                  <div className="py-2 text-center text-[12px] text-zinc-500">
+                    正在思考…
+                  </div>
+                )}
               </div>
             )}
             <div ref={eventsEndRef} />
@@ -717,6 +785,38 @@ export default function SessionDetailPage() {
           </Button>
         )}
       </div>
+    </div>
+  )
+}
+
+function AgentMessageText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const lines = text.split('\n')
+  const shouldCollapse = lines.length > 3
+  const displayText = !shouldCollapse || expanded ? text : lines.slice(0, 3).join('\n')
+
+  return (
+    <div>
+      <div className="text-[13px] leading-6 text-zinc-200">
+        <ReactMarkdown
+          components={{
+            p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+            code: ({ children }) => <code className="rounded bg-zinc-800 px-1 py-0.5 text-zinc-100">{children}</code>,
+            pre: ({ children }) => <pre className="my-2 overflow-x-auto rounded bg-zinc-950 p-2 text-zinc-100">{children}</pre>,
+          }}
+        >
+          {displayText}
+        </ReactMarkdown>
+      </div>
+      {shouldCollapse && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-xs text-zinc-400 hover:text-zinc-200"
+        >
+          {expanded ? '收起' : `展开剩余 ${lines.length - 3} 行`}
+        </button>
+      )}
     </div>
   )
 }

@@ -13,9 +13,9 @@ load_dotenv(env_path)
 BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
 
 try:
-    BACKEND_PORT = int(os.getenv("BACKEND_PORT", "7000"))
+    BACKEND_PORT = int(os.getenv("BACKEND_PORT", "17000"))
 except ValueError:
-    BACKEND_PORT = 7000
+    BACKEND_PORT = 17000
 
 from loguru import logger
 from fastapi import FastAPI, Request
