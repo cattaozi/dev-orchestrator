@@ -479,7 +479,11 @@ export default function IssueDetailPage() {
   }, [startConfig])
 
   const formatDateTime = (dateStr: string) => {
-    const date = new Date(dateStr)
+    if (!dateStr || dateStr === 'None' || dateStr === 'null') return '-'
+    const normalized = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T')
+    const trimmedMs = normalized.replace(/(\.\d{3})\d+/, '$1')
+    const date = new Date(trimmedMs)
+    if (Number.isNaN(date.getTime())) return dateStr
     return date.toLocaleString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
@@ -525,43 +529,65 @@ export default function IssueDetailPage() {
       <div className="flex items-center gap-4">
         <div className="flex-1">
           {editing ? (
-            <div className="space-y-2">
-              <Input
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="text-2xl font-bold h-auto py-2"
-                placeholder="Issue title"
-              />
-              <select
-                value={editStatus}
-                onChange={(e) => setEditStatus(e.target.value)}
-                className="h-8 text-sm border rounded px-2 bg-background"
-              >
-                <option value="pending">Pending</option>
-                <option value="in_progress">In Progress</option>
-                <option value="need_review">Need Review</option>
-                <option value="need_test">Need Test</option>
-                <option value="done">Done</option>
-                <option value="failed">Failed</option>
-              </select>
-            </div>
+            <Card className="border-dashed">
+              <CardContent className="pt-4 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-muted-foreground">标题</label>
+                  <Input
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="text-xl font-semibold h-12"
+                    placeholder="Issue title"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-4 items-end">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-muted-foreground">状态</label>
+                    <select
+                      value={editStatus}
+                      onChange={(e) => setEditStatus(e.target.value)}
+                      className="h-10 w-full text-sm border rounded-md px-3 bg-background"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="need_review">Need Review</option>
+                      <option value="need_test">Need Test</option>
+                      <option value="done">Done</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-2 md:justify-end">
+                    <Button variant="outline" size="sm" onClick={cancelEdit} disabled={saving}>
+                      <X className="h-3 w-3 mr-1" />
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSave} disabled={saving}>
+                      {saving ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
+                      {saving ? 'Saving...' : 'Save'}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           ) : (
-            <h1 className="text-2xl font-bold">{issue.title || 'Untitled Issue'}</h1>
+            <>
+              <h1 className="text-2xl font-bold">{issue.title || 'Untitled Issue'}</h1>
+              <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
+                <span className="font-mono">#{issue.id}</span>
+                <Badge className={getStatusBadgeClass(issue.status)}>
+                  {getStatusText(issue.status)}
+                </Badge>
+                <Link href={`/projects/${projectId}`} className="flex items-center gap-1 hover:text-foreground">
+                  <Folder className="h-4 w-4" />
+                  <span>{project.name}</span>
+                </Link>
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  <span>{formatDateTime(issue.created_at)}</span>
+                </div>
+              </div>
+            </>
           )}
-          <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
-            <span className="font-mono">#{issue.id}</span>
-            <Badge className={getStatusBadgeClass(issue.status)}>
-              {getStatusText(issue.status)}
-            </Badge>
-            <Link href={`/projects/${projectId}`} className="flex items-center gap-1 hover:text-foreground">
-              <Folder className="h-4 w-4" />
-              <span>{project.name}</span>
-            </Link>
-            <div className="flex items-center gap-1">
-              <Calendar className="h-4 w-4" />
-              <span>{formatDateTime(issue.created_at)}</span>
-            </div>
-          </div>
         </div>
         <div className="relative flex items-center gap-2">
           {startConfig && startConfig.workers.length > 0 && !editing && (
@@ -620,18 +646,7 @@ export default function IssueDetailPage() {
 
       {/* Action Buttons */}
       <div className="flex gap-2">
-        {editing ? (
-          <>
-            <Button variant="outline" size="sm" onClick={cancelEdit} disabled={saving}>
-              <X className="h-3 w-3 mr-1" />
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </>
-        ) : (
+        {!editing && (
           <>
             {issue?.status === 'done' && (
               <Button variant="outline" size="sm" onClick={() => handleCloseIssue(true)} disabled={closing}>
@@ -758,7 +773,7 @@ export default function IssueDetailPage() {
             <DialogTitle>删除 Session</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            确定要删除 Session "{sessionToDelete?.branch}" 吗？这将删除 Session 数据、相关事件、worktree 和分支。
+            确定要删除 Session 「{sessionToDelete?.branch}」吗？这将删除 Session 数据、相关事件、worktree 和分支。
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSessionDeleteDialog(false)} disabled={deletingSession}>

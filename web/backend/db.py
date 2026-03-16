@@ -89,6 +89,12 @@ def init_db():
         )
     """)
 
+    # Schema self-heal for legacy databases:
+    # historical `issues.created_at` may be nullable and missing default.
+    cursor.execute("ALTER TABLE issues ALTER COLUMN created_at SET DEFAULT NOW()")
+    cursor.execute("UPDATE issues SET created_at = NOW() WHERE created_at IS NULL")
+    cursor.execute("ALTER TABLE issues ALTER COLUMN created_at SET NOT NULL")
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sessions (
             id SERIAL PRIMARY KEY,

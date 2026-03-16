@@ -40,6 +40,20 @@ def update_issue(project_id: int, issue_id: int, issue_update: IssueUpdate):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.put("/{issue_id}", response_model=IssueResponse)
+def update_issue_put(project_id: int, issue_id: int, issue_update: IssueUpdate):
+    """PUT alias for update to keep compatibility with frontend callers."""
+    try:
+        return issue_service.update_issue(
+            project_id, issue_id,
+            title=issue_update.title,
+            content=issue_update.content,
+            status=issue_update.status
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.delete("/{issue_id}")
 def delete_issue(project_id: int, issue_id: int):
     try:
