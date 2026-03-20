@@ -1,5 +1,6 @@
 # Services package
 from services import (
+    inference_service,
     project_service,
     issue_service,
     session_service,
@@ -9,6 +10,7 @@ from services import (
 )
 
 __all__ = [
+    "inference_service",
     "project_service",
     "issue_service",
     "session_service",

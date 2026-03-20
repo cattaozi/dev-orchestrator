@@ -127,10 +127,59 @@ def init_db():
         )
     """)
 
+    # Persist project-level chat session lifecycle for reconnect/status restore.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS project_chat_sessions (
+            project_id INTEGER PRIMARY KEY,
+            session_id INTEGER,
+            status TEXT DEFAULT 'idle',
+            last_active_at TIMESTAMP DEFAULT NOW(),
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS config (
             key TEXT PRIMARY KEY,
             value TEXT
+        )
+    """)
+
+    # Runtime services observed for each project (first version).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS project_runtime_services (
+            id SERIAL PRIMARY KEY,
+            project_id INTEGER NOT NULL,
+            pid INTEGER,
+            port INTEGER,
+            url TEXT,
+            command TEXT,
+            status TEXT DEFAULT 'running',
+            started_at TIMESTAMP DEFAULT NOW(),
+            last_seen_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(project_id, pid, port)
+        )
+    """)
+
+    # Managed service definitions and lifecycle state per project.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS project_services (
+            id SERIAL PRIMARY KEY,
+            project_id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            start_command TEXT NOT NULL,
+            stop_command TEXT DEFAULT '',
+            workdir TEXT NOT NULL,
+            port INTEGER,
+            healthcheck_url TEXT DEFAULT '',
+            status TEXT DEFAULT 'stopped',
+            pid INTEGER,
+            last_error TEXT DEFAULT '',
+            last_started_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(project_id, name)
         )
     """)
 

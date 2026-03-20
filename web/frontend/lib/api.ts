@@ -3,7 +3,6 @@ const API_BASE = '/api'
 export interface Project {
   id: number
   name: string
-  repo: string
   local_path: string
   status: string
   created_at: string

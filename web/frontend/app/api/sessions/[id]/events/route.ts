@@ -30,3 +30,17 @@ export async function GET(
     return NextResponse.json({ error: 'Backend unavailable', events: [] }, { status: 500 })
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const sessionId = params.id
+  try {
+    const res = await fetch(`${API_BASE}/sessions/${sessionId}/events`, { method: 'DELETE' })
+    const data = await res.json().catch(() => ({}))
+    return NextResponse.json(data, { status: res.status })
+  } catch (error) {
+    return NextResponse.json({ error: 'Backend unavailable' }, { status: 500 })
+  }
+}

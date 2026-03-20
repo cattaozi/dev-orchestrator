@@ -4,7 +4,6 @@ interface Project {
   id: number
   name: string
   description: string
-  repo: string
   local_path: string
   status: string
   favorited: boolean

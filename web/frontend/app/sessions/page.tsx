@@ -1,7 +1,5 @@
 'use client'
 
-'use client'
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,7 +12,7 @@ export default function SessionsPage() {
 
   useEffect(() => {
     fetchSessions()
-  }, [])
+  }, [fetchSessions])
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -70,7 +68,7 @@ export default function SessionsPage() {
                   </Badge>
                 </div>
                 <CardDescription>
-                  Issue #{session.issue_id} • {session.agent_type} • {session.runtime}
+                  Task #{session.issue_id ?? '-'} • {session.agent_type} • {session.runtime}
                 </CardDescription>
               </CardHeader>
               <CardContent>

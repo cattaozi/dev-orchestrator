@@ -84,7 +84,7 @@ from db import init_db
 init_db()
 
 # Import routers
-from routers import projects, prds, issues, workers, sessions, config
+from routers import projects, prds, issues, workers, sessions, config, inference
 
 app = FastAPI(title="DevOrchestrator API")
 
@@ -121,6 +121,7 @@ app.include_router(issues.router)
 app.include_router(workers.router)
 app.include_router(sessions.router)
 app.include_router(config.router)
+app.include_router(inference.router)
 
 
 @app.get("/")

@@ -62,6 +62,15 @@ def get_session_events(session_id: int, after_id: int = 0):
     return {"events": events, "status": session["status"]}
 
 
+@router.delete("/{session_id}/events")
+def clear_session_events(session_id: int):
+    session = session_service.get_session_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session_service.clear_session_events(session_id)
+    return {"message": "Session events cleared"}
+
+
 @router.get("/{session_id}/history")
 def get_session_history(session_id: int):
     session = session_service.get_session_by_id(session_id)

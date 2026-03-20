@@ -6,9 +6,7 @@ from typing import Optional
 class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
-    repo: str = ""
     local_path: str
-    default_branch: str = "main"
     favorited: bool = False
 
 
@@ -16,7 +14,6 @@ class ProjectResponse(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
-    repo: str
     local_path: str
     status: str
     favorited: bool = False
@@ -26,7 +23,7 @@ class ProjectResponse(BaseModel):
 # Session Models
 class SessionResponse(BaseModel):
     id: int
-    issue_id: int
+    issue_id: Optional[int] = None
     project_id: int
     branch: str
     worktree_path: str
@@ -41,9 +38,17 @@ class SessionResponse(BaseModel):
 
 
 class SessionCreate(BaseModel):
-    issue_id: int
+    issue_id: Optional[int] = None
+    project_id: Optional[int] = None
     worker_id: Optional[int] = None
     runtime: Optional[str] = "agent-sdk"
+
+
+class ProjectChatSessionResponse(BaseModel):
+    project_id: int
+    session_id: Optional[int] = None
+    status: str
+    last_active_at: Optional[str] = None
 
 
 # Worker Models
